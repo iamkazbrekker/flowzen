@@ -63,8 +63,9 @@ function disruptionAffectsLeg(
       route.includes(lt)
   );
 
-  // At least one of: mode + location, or a generic critical disruption
-  return modeHit && (locationHit || d.severity === "critical");
+  // Mode + location match, OR high/critical severity on the same transport mode
+  // (a major high-severity event on the same mode type should always flag the leg)
+  return modeHit && (locationHit || d.severity === "critical" || d.severity === "high");
 }
 
 // ── Alternative mode recommendation ──────────────────────────────────────────

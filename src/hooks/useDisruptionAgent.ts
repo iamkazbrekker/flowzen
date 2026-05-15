@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { Journey, JourneyLeg } from "../components/JourneyBuilder";
+import type { Journey, JourneyLeg } from "../app/components/JourneyBuilder";
 import type { DisruptionEvent } from "@/lib/types";
-import type { RerouteResult } from "../api/agent/reroute/route";
+import type { RerouteResult } from "../app/api/agent/reroute/route";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 export interface LegAnalysis {
   legId: string;
   result: RerouteResult;
@@ -20,8 +19,10 @@ export interface AgentState {
   error: string | null;
 }
 
-// ── Hook ──────────────────────────────────────────────────────────────────────
-export function useDisruptionAgent(journeys: Journey[]) {
+export function useDisruptionAgent(
+  journeys: Journey[],
+  simulatedDisruptions: DisruptionEvent[] = []
+) {
   const [state, setState] = useState<AgentState>({
     disruptions: [],
     analyses: [],
@@ -30,110 +31,150 @@ export function useDisruptionAgent(journeys: Journey[]) {
     error: null,
   });
 
-  const analysedLegs = useRef<Set<string>>(new Set());
+  // Cache real disruptions — avoid Supabase re-fetch on every sim injection
+  const cachedReal = useRef<DisruptionEvent[]>([]);
+  const lastRealFetch = useRef<number>(0);
 
-  // Fetch active disruptions from Supabase (via our API)
-  const fetchDisruptions = useCallback(async () => {
+  // Stable ref that always holds the latest simulated disruptions
+  // so async callbacks always read the freshest value
+  const simRef = useRef<DisruptionEvent[]>(simulatedDisruptions);
+  simRef.current = simulatedDisruptions;
+
+  // Generation counter — incremented each run to invalidate stale async results
+  const gen = useRef(0);
+
+  const fetchReal = useCallback(async (): Promise<DisruptionEvent[]> => {
+    const now = Date.now();
+    if (now - lastRealFetch.current < 60_000 && cachedReal.current.length > 0) {
+      return cachedReal.current;
+    }
     try {
       const res = await fetch("/api/disruptions");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      setState((prev) => ({
+      const data = (json.disruptions ?? []) as DisruptionEvent[];
+      cachedReal.current = data;
+      lastRealFetch.current = now;
+      setState(prev => ({
         ...prev,
-        disruptions: json.disruptions ?? [],
+        disruptions: data,
         lastFetched: json.fetched_at ?? new Date().toISOString(),
         error: null,
       }));
-      return json.disruptions as DisruptionEvent[];
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setState((prev) => ({ ...prev, error: msg }));
-      return [] as DisruptionEvent[];
+      return data;
+    } catch {
+      return cachedReal.current;
     }
   }, []);
 
-  // Run the reroute agent on a single leg
-  const analyseLeg = useCallback(
-    async (leg: JourneyLeg, disruptions: DisruptionEvent[]) => {
-      if (!leg.from || !leg.to || analysedLegs.current.has(leg.id)) return;
-      analysedLegs.current.add(leg.id);
+  const runAnalysis = useCallback(async (
+    leg: JourneyLeg,
+    realDisruptions: DisruptionEvent[],
+    simDisruptions: DisruptionEvent[],
+    myGen: number
+  ) => {
+    if (!leg.from || !leg.to) return;
 
-      setState((prev) => ({
+    setState(prev => ({
+      ...prev,
+      analyses: [
+        ...prev.analyses.filter(a => a.legId !== leg.id),
+        { legId: leg.id, result: {} as RerouteResult, loading: true },
+      ],
+    }));
+
+    try {
+      const res = await fetch("/api/agent/reroute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leg: {
+            id: leg.id,
+            fromName: leg.from.name,
+            fromLat: leg.from.lat,
+            fromLng: leg.from.lng,
+            toName: leg.to.name,
+            toLat: leg.to.lat,
+            toLng: leg.to.lng,
+            mode: leg.mode,
+          },
+          disruptions: [...realDisruptions, ...simDisruptions],
+        }),
+      });
+      if (gen.current !== myGen) return; // stale — a newer run started
+      const result: RerouteResult = await res.json();
+      if (gen.current !== myGen) return;
+      setState(prev => ({
         ...prev,
-        analyses: [
-          ...prev.analyses.filter((a) => a.legId !== leg.id),
-          { legId: leg.id, result: {} as RerouteResult, loading: true },
-        ],
+        analyses: prev.analyses.map(a =>
+          a.legId === leg.id ? { ...a, result, loading: false } : a
+        ),
       }));
+    } catch {
+      if (gen.current !== myGen) return;
+      setState(prev => ({
+        ...prev,
+        analyses: prev.analyses.filter(a => a.legId !== leg.id),
+      }));
+    }
+  }, []);
 
-      try {
-        const res = await fetch("/api/agent/reroute", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            leg: {
-              id: leg.id,
-              fromName: leg.from.name,
-              fromLat: leg.from.lat,
-              fromLng: leg.from.lng,
-              toName: leg.to.name,
-              toLat: leg.to.lat,
-              toLng: leg.to.lng,
-              mode: leg.mode,
-            },
-            disruptions,
-          }),
-        });
+  // Trigger re-run whenever journeys or simulatedDisruptions reference changes.
+  // We use a separate effect that increments a counter-state so the main
+  // effect dep is a stable primitive, not the mutable array.
+  const [runTick, setRunTick] = useState(0);
+  const prevSimLen = useRef(-1);
+  const prevSimKey = useRef("");
 
-        const result: RerouteResult = await res.json();
-        setState((prev) => ({
-          ...prev,
-          analyses: prev.analyses.map((a) =>
-            a.legId === leg.id ? { ...a, result, loading: false } : a
-          ),
-        }));
-      } catch {
-        analysedLegs.current.delete(leg.id); // Allow retry on error
-        setState((prev) => ({
-          ...prev,
-          analyses: prev.analyses.filter((a) => a.legId !== leg.id),
-        }));
-      }
-    },
-    []
-  );
-
-  // Re-run agent whenever journeys change
   useEffect(() => {
-    const allLegs = journeys.flatMap((j) => j.legs).filter((l) => l.from && l.to);
+    const key = simulatedDisruptions.map(d => d.title + d.severity).join("|");
+    if (
+      simulatedDisruptions.length !== prevSimLen.current ||
+      key !== prevSimKey.current
+    ) {
+      prevSimLen.current = simulatedDisruptions.length;
+      prevSimKey.current = key;
+      setRunTick(t => t + 1);
+    }
+  }, [simulatedDisruptions]);
+
+  // Main analysis orchestration
+  useEffect(() => {
+    const allLegs = journeys.flatMap(j => j.legs).filter(l => l.from && l.to);
     if (allLegs.length === 0) return;
 
-    let cancelled = false;
+    gen.current += 1;
+    const myGen = gen.current;
+    let alive = true;
+
+    setState(prev => ({ ...prev, loading: true, analyses: [] }));
 
     (async () => {
-      setState((prev) => ({ ...prev, loading: true }));
-      const disruptions = await fetchDisruptions();
-      if (cancelled) return;
-      setState((prev) => ({ ...prev, loading: false }));
+      const real = await fetchReal();
+      if (!alive || gen.current !== myGen) return;
+      setState(prev => ({ ...prev, loading: false }));
 
-      // Stagger analyses to avoid hammering the API
-      for (const leg of allLegs) {
-        if (cancelled) break;
-        await analyseLeg(leg, disruptions);
-        await new Promise((r) => setTimeout(r, 150));
-      }
+      // Run legs in parallel with small stagger
+      await Promise.all(
+        allLegs.map(async (leg, i) => {
+          await new Promise(r => setTimeout(r, i * 100));
+          if (!alive || gen.current !== myGen) return;
+          // Use the ref so we always send the freshest sim disruptions
+          await runAnalysis(leg, real, simRef.current, myGen);
+        })
+      );
     })();
 
-    return () => { cancelled = true; };
-  }, [journeys, fetchDisruptions, analyseLeg]);
+    return () => { alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journeys, fetchReal, runAnalysis, runTick]);
 
-  // Helper: get analysis for a specific leg
-  const getLegAnalysis = (legId: string): LegAnalysis | undefined =>
-    state.analyses.find((a) => a.legId === legId);
+  const getLegAnalysis = (legId: string) =>
+    state.analyses.find(a => a.legId === legId);
 
-  // Critical/high disruptions across all legs
   const criticalAlerts = state.analyses.filter(
-    (a) => !a.loading && a.result.affected && (a.result.severity === "critical" || a.result.severity === "high")
+    a => !a.loading && a.result.affected &&
+      (a.result.severity === "critical" || a.result.severity === "high")
   );
 
   return { ...state, getLegAnalysis, criticalAlerts };

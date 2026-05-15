@@ -5,6 +5,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Journey, JourneyLeg, JourneyMode } from "./JourneyBuilder";
 import { calculateSeaRoute } from "../data/seaRoutes";
+import type { LegAnalysis } from "../../hooks/useDisruptionAgent";
 
 export interface MapHandle {
   zoomIn: () => void;
@@ -16,6 +17,36 @@ export interface MapHandle {
 interface MapProps {
   journeys: Journey[];
   onLegClick?: (journey: Journey, leg: JourneyLeg) => void;
+  analyses?: LegAnalysis[];
+}
+
+// ── Severity → visual overrides ───────────────────────────────────────────────
+const SEV_COLOR: Record<string, string> = {
+  critical: "#ef4444",
+  high: "#f97316",
+  medium: "#eab308",
+  low: "#818cf8",
+};
+const SEV_DASH: Record<string, string> = {
+  critical: "6, 4",
+  high: "8, 5",
+  medium: "10, 6",
+  low: "12, 8",
+};
+
+function makeDisruptionIcon(severity: string, rerouted: boolean) {
+  const bg = SEV_COLOR[severity] ?? "#f97316";
+  const label = rerouted ? "↪ REROUTED" : `⚠ ${severity.toUpperCase()}`;
+  return L.divIcon({
+    html: `<div style="
+      background:rgba(0,0,0,0.9);border:1px solid ${bg};
+      color:${bg};font-size:7px;font-family:monospace;letter-spacing:1px;
+      padding:2px 7px;border-radius:10px;white-space:nowrap;pointer-events:none;
+      box-shadow:0 0 10px ${bg}55;
+      animation:fzPulse 2s ease-in-out infinite;
+    ">${label}</div>`,
+    className: "", iconSize: [0, 0], iconAnchor: [0, 0],
+  });
 }
 
 // ── Geodesic great-circle (for air routes) ────────────────────────────────────
@@ -70,9 +101,9 @@ async function getLegWaypoints(leg: JourneyLeg): Promise<[number, number][]> {
       return pts ?? [from, to];
     }
     case "rail": {
-      // OSRM driving follows similar corridors to rail for inter-city routes
+      // Try OSRM first; fall back to geodesic arc (looks far better than a straight line)
       const pts = await fetchOSRM(from, to, "driving");
-      return pts ?? [from, to];
+      return pts ?? geodesicPoints(from, to, 32);
     }
     case "sea":
       return calculateSeaRoute(from, to);
@@ -114,7 +145,7 @@ function makeLabelIcon(text: string, color: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick }, ref) => {
+const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = [] }, ref) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<L.Map | null>(null);
   const journeyLayerGroup = useRef<L.LayerGroup | null>(null);
@@ -145,8 +176,10 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick }, ref) => {
       s.textContent = `
         .leaflet-container { background:#050508 !important; }
         @keyframes fzPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.7)} }
+        @keyframes fzDash { to { stroke-dashoffset: -30; } }
         @keyframes spin { to { transform: rotate(360deg); } }
         .fz-leg { cursor: pointer; }
+        .fz-disrupted path { animation: fzDash 1s linear infinite !important; }
       `;
       document.head.appendChild(s);
     }
@@ -162,7 +195,7 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick }, ref) => {
     return () => { map.remove(); mapInstance.current = null; };
   }, []);
 
-  // Re-render journeys when they change
+  // Re-render journeys when they change OR when analyses update
   useEffect(() => {
     if (!journeyLayerGroup.current) return;
     journeyLayerGroup.current.clearLayers();
@@ -171,21 +204,35 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick }, ref) => {
     journeys.forEach(journey => {
       journey.legs.forEach((leg, legIdx) => {
         if (!leg.from || !leg.to) return;
-        const color = leg.color ?? "#60a5fa";
+
+        const legAnalysis = analyses.find(a => a.legId === leg.id);
+        const isLoading = legAnalysis?.loading ?? false;
+        const result = legAnalysis?.result;
+        const affected = result?.affected && !isLoading;
+        const severity = result?.severity ?? "none";
+        const rerouted = result?.rerouted ?? false;
+
+        // Pick display colour
+        const baseColor = leg.color ?? "#60a5fa";
+        const lineColor = affected ? (SEV_COLOR[severity] ?? baseColor) : baseColor;
         const style = MODE_STYLE[leg.mode];
+        const dashArray = affected ? (SEV_DASH[severity] ?? style.dashArray) : style.dashArray;
+        const lineWeight = affected ? style.weight + 1 : style.weight;
+        const lineOpacity = affected ? 0.95 : style.opacity;
+        const className = affected ? "fz-leg fz-disrupted" : "fz-leg";
 
         // Initial placeholder line
         const placeholder = L.polyline(
           [[leg.from.lat, leg.from.lng], [leg.to.lat, leg.to.lng]],
-          { color, weight: style.weight, opacity: 0.3, dashArray: style.dashArray, className: "fz-leg" }
+          { color: lineColor, weight: lineWeight, opacity: 0.3, dashArray, className }
         );
         journeyLayerGroup.current!.addLayer(placeholder);
 
-        // Hub markers
-        const fromM = L.marker([leg.from.lat, leg.from.lng], { icon: makeHubIcon(color, legIdx === 0) });
-        const toM = L.marker([leg.to.lat, leg.to.lng], { icon: makeHubIcon(color, false) });
-        const fromL = L.marker([leg.from.lat, leg.from.lng], { icon: makeLabelIcon(leg.from.name, color) });
-        const toL = L.marker([leg.to.lat, leg.to.lng], { icon: makeLabelIcon(leg.to.name, color) });
+        // Hub markers — pulse red if disrupted
+        const fromM = L.marker([leg.from.lat, leg.from.lng], { icon: makeHubIcon(lineColor, legIdx === 0 || affected) });
+        const toM = L.marker([leg.to.lat, leg.to.lng], { icon: makeHubIcon(lineColor, affected) });
+        const fromL = L.marker([leg.from.lat, leg.from.lng], { icon: makeLabelIcon(leg.from.name, lineColor) });
+        const toL = L.marker([leg.to.lat, leg.to.lng], { icon: makeLabelIcon(leg.to.name, lineColor) });
         journeyLayerGroup.current!.addLayer(fromM);
         journeyLayerGroup.current!.addLayer(toM);
         journeyLayerGroup.current!.addLayer(fromL);
@@ -196,8 +243,8 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick }, ref) => {
         const midLng = (leg.from.lng + leg.to.lng) / 2;
         const midLabel = L.marker([midLat, midLng], {
           icon: L.divIcon({
-            html: `<div style="background:rgba(0,0,0,0.88);border:1px solid ${color}44;
-              color:${color};font-size:7px;font-family:monospace;letter-spacing:1.5px;
+            html: `<div style="background:rgba(0,0,0,0.88);border:1px solid ${lineColor}55;
+              color:${lineColor};font-size:7px;font-family:monospace;letter-spacing:1.5px;
               padding:2px 7px;border-radius:10px;white-space:nowrap;pointer-events:none;">
               ${MODE_LABELS[leg.mode]}</div>`,
             className: "", iconSize: [0, 0], iconAnchor: [0, 0],
@@ -205,16 +252,32 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick }, ref) => {
         });
         journeyLayerGroup.current!.addLayer(midLabel);
 
+        // Disruption badge — slightly offset from midpoint
+        if (affected) {
+          const badgeLat = midLat + 1.5;
+          const badgeLng = midLng + 1.5;
+          const badge = L.marker([badgeLat, badgeLng], {
+            icon: makeDisruptionIcon(severity, rerouted),
+            zIndexOffset: 1000,
+          });
+          journeyLayerGroup.current!.addLayer(badge);
+        }
+
         // Async: fetch real routing geometry
         getLegWaypoints(leg).then(pts => {
           if (!journeyLayerGroup.current) return;
           journeyLayerGroup.current.removeLayer(placeholder);
+
+          // Main route line
           const poly = L.polyline(pts, {
-            color, weight: style.weight, opacity: style.opacity,
-            dashArray: style.dashArray, className: "fz-leg",
+            color: lineColor,
+            weight: lineWeight,
+            opacity: lineOpacity,
+            dashArray,
+            className,
           });
-          poly.on("mouseover", () => poly.setStyle({ opacity: 1, weight: style.weight + 1.5 }));
-          poly.on("mouseout", () => poly.setStyle({ opacity: style.opacity, weight: style.weight }));
+          poly.on("mouseover", () => poly.setStyle({ opacity: 1, weight: lineWeight + 1.5 }));
+          poly.on("mouseout", () => poly.setStyle({ opacity: lineOpacity, weight: lineWeight }));
           poly.on("click", e => {
             L.DomEvent.stopPropagation(e);
             onLegClick?.(journey, leg);
@@ -223,10 +286,23 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick }, ref) => {
             }
           });
           journeyLayerGroup.current!.addLayer(poly);
+
+          // If rerouted: draw a blue ghost of the original straight-line path
+          if (rerouted) {
+            const altPts: [number, number][] = [[leg.from!.lat, leg.from!.lng], [leg.to!.lat, leg.to!.lng]];
+            const altLine = L.polyline(altPts, {
+              color: "#60a5fa",
+              weight: 1.5,
+              opacity: 0.35,
+              dashArray: "4, 8",
+              className: "fz-leg",
+            });
+            journeyLayerGroup.current!.addLayer(altLine);
+          }
         });
       });
     });
-  }, [journeys, onLegClick]);
+  }, [journeys, onLegClick, analyses]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
