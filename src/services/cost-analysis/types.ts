@@ -37,8 +37,8 @@ export interface DistanceResult {
 
 export interface ModeEstimate {
   mode: TransportMode;
-  base_cost_usd: number;
-  adjusted_cost_usd: number;
+  base_cost_inr: number;
+  adjusted_cost_inr: number;
   transit_days: number;
   adjusted_transit_days: number;
   reliability_score: number;   // 0–1
@@ -75,7 +75,7 @@ export interface RouteData {
 
 export interface AIRecommendation {
   recommended_mode: TransportMode;
-  estimated_cost_usd: number;
+  estimated_cost_inr: number;
   estimated_delay_days: number;
   risk_level: "low" | "medium" | "high" | "critical";
   reason: string;
@@ -94,6 +94,10 @@ export interface CostAnalysisResult {
   mode_estimates: ModeEstimate[];
   disruption_impacts: DisruptionImpact[];
   ai_recommendation: AIRecommendation;
+  exchange_rate?: {
+    api_used: string;
+    usd_to_inr: number;
+  };
   timestamp: string;
   pipeline_duration_ms: number;
 }
@@ -114,6 +118,10 @@ export interface AgentContext {
     estimated_delay_days: number;
   }>;
   ai_recommendation?: AIRecommendation;
+  exchange_rate?: {
+    api_used: string;
+    usd_to_inr: number;
+  };
   logs: string[];
   errors: string[];
 }

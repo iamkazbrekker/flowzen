@@ -31,7 +31,7 @@ CRITICAL RULES:
 OUTPUT FORMAT — Return ONLY valid JSON matching this exact schema:
 {
   "recommended_mode": "air" | "sea" | "rail" | "road",
-  "estimated_cost_usd": number,
+  "estimated_cost_inr": number,
   "estimated_delay_days": number,
   "risk_level": "low" | "medium" | "high" | "critical",
   "reason": "2-3 sentence explanation citing specific data",
@@ -70,7 +70,7 @@ function buildUserPrompt(ctx: AgentContext): string {
   // Mode estimates
   if (ctx.mode_estimates && ctx.mode_estimates.length > 0) {
     const modeLines = ctx.mode_estimates.map((e) =>
-      `- ${e.mode.toUpperCase()}: Cost=$${e.adjusted_cost_usd} (base=$${e.base_cost_usd}), Transit=${e.adjusted_transit_days}d (base=${e.transit_days}d), Reliability=${(e.reliability_score * 100).toFixed(0)}%, Risk=${e.risk_level}, CO2=${e.co2_kg}kg, Disruption×${e.disruption_multiplier.toFixed(2)}`
+      `- ${e.mode.toUpperCase()}: Cost=₹${e.adjusted_cost_inr} (base=₹${e.base_cost_inr}), Transit=${e.adjusted_transit_days}d (base=${e.transit_days}d), Reliability=${(e.reliability_score * 100).toFixed(0)}%, Risk=${e.risk_level}, CO2=${e.co2_kg}kg, Disruption×${e.disruption_multiplier.toFixed(2)}`
     );
     sections.push(`## TRANSPORT MODE ESTIMATES (REAL-TIME DATA)\n${modeLines.join("\n")}`);
   }
@@ -109,7 +109,7 @@ function buildFallbackRecommendation(ctx: AgentContext): AIRecommendation {
   if (estimates.length === 0) {
     return {
       recommended_mode: "sea",
-      estimated_cost_usd: 0,
+      estimated_cost_inr: 0,
       estimated_delay_days: 0,
       risk_level: "medium",
       reason: "Insufficient data for AI analysis. Defaulting to sea freight.",
@@ -124,22 +124,22 @@ function buildFallbackRecommendation(ctx: AgentContext): AIRecommendation {
   // Simple heuristic fallback
   const sorted = [...estimates].sort((a, b) => {
     // Composite score: lower is better
-    const scoreA = a.adjusted_cost_usd / 1000 + a.adjusted_transit_days * 2 + (a.risk_level === "high" || a.risk_level === "critical" ? 10 : 0);
-    const scoreB = b.adjusted_cost_usd / 1000 + b.adjusted_transit_days * 2 + (b.risk_level === "high" || b.risk_level === "critical" ? 10 : 0);
+    const scoreA = a.adjusted_cost_inr / 100000 + a.adjusted_transit_days * 2 + (a.risk_level === "high" || a.risk_level === "critical" ? 10 : 0);
+    const scoreB = b.adjusted_cost_inr / 100000 + b.adjusted_transit_days * 2 + (b.risk_level === "high" || b.risk_level === "critical" ? 10 : 0);
     return scoreA - scoreB;
   });
 
-  const cheapest = [...estimates].sort((a, b) => a.adjusted_cost_usd - b.adjusted_cost_usd)[0];
+  const cheapest = [...estimates].sort((a, b) => a.adjusted_cost_inr - b.adjusted_cost_inr)[0];
   const fastest = [...estimates].sort((a, b) => a.adjusted_transit_days - b.adjusted_transit_days)[0];
   const safest = [...estimates].sort((a, b) => b.reliability_score - a.reliability_score)[0];
   const best = sorted[0];
 
   return {
     recommended_mode: best.mode,
-    estimated_cost_usd: best.adjusted_cost_usd,
+    estimated_cost_inr: best.adjusted_cost_inr,
     estimated_delay_days: best.adjusted_transit_days,
     risk_level: best.risk_level,
-    reason: `Fallback analysis: ${best.mode} offers the best balance of cost ($${best.adjusted_cost_usd}), transit time (${best.adjusted_transit_days}d), and reliability (${(best.reliability_score * 100).toFixed(0)}%).`,
+    reason: `Fallback analysis: ${best.mode} offers the best balance of cost (₹${best.adjusted_cost_inr}), transit time (${best.adjusted_transit_days}d), and reliability (${(best.reliability_score * 100).toFixed(0)}%).`,
     best_route: best.mode,
     safest_route: safest.mode,
     fastest_route: fastest.mode,
@@ -182,7 +182,7 @@ export async function recommendationAgent(ctx: AgentContext): Promise<AgentConte
 
       ctx.ai_recommendation = recommendation;
       ctx.logs.push(
-        `[RecommendationAgent] AI recommends: ${recommendation.recommended_mode.toUpperCase()} — $${recommendation.estimated_cost_usd}, ${recommendation.estimated_delay_days}d, risk=${recommendation.risk_level}`
+        `[RecommendationAgent] AI recommends: ${recommendation.recommended_mode.toUpperCase()} — ₹${recommendation.estimated_cost_inr}, ${recommendation.estimated_delay_days}d, risk=${recommendation.risk_level}`
       );
       ctx.logs.push(`[RecommendationAgent] Reason: ${recommendation.reason}`);
       ctx.logs.push(`[RecommendationAgent] Completed in ${Date.now() - start}ms`);

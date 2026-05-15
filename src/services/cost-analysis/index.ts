@@ -69,6 +69,7 @@ export async function runCostAnalysis(
     mode_estimates: ctx.mode_estimates ?? [],
     disruption_impacts: ctx.disruption_impacts ?? [],
     ai_recommendation: ctx.ai_recommendation!,
+    exchange_rate: ctx.exchange_rate,
     timestamp: new Date().toISOString(),
     pipeline_duration_ms: durationMs,
   };

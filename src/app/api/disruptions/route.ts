@@ -1,30 +1,26 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabaseClient";
-import type { DisruptionEvent } from "@/lib/types";
+import { runPipeline } from "@/lib/pipeline";
 
-export const runtime = "nodejs";
-export const revalidate = 60; // Cache for 60s
+export const dynamic = "force-dynamic";
+export const maxDuration = 60; // Cache for 60s
 
 export async function GET() {
   try {
-    const { data, error } = await supabase
-      .from("disruptions")
-      .select("*")
-      .eq("is_disruption", true)
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (error) {
-      console.error("Supabase fetch error:", error.message);
-      return NextResponse.json({ disruptions: [], error: error.message }, { status: 500 });
-    }
-
+    console.log("[/api/disruptions] Triggering NLP disruption pipeline...");
+    const result = await runPipeline();
+    
     return NextResponse.json({
-      disruptions: (data ?? []) as DisruptionEvent[],
-      fetched_at: new Date().toISOString(),
-    });
+      disruptions: result.events,
+      metadata: {
+        total_fetched: result.total_fetched,
+        relevant_count: result.relevant_count,
+        deduplicated_count: result.deduplicated_count,
+        timestamp: result.timestamp
+      }
+    }, { status: 200 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error("[/api/disruptions] Pipeline error:", msg);
     return NextResponse.json({ disruptions: [], error: msg }, { status: 500 });
   }
 }

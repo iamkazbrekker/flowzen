@@ -10,7 +10,7 @@ import { TransportMode } from "../types";
 interface ModeRates {
   base_per_km: number;            // USD per km per 1000kg
   weight_factor: number;          // multiplier per 1000kg
-  min_charge_usd: number;         // floor charge
+  min_charge_in_usd: number;         // floor charge
   base_transit_days_per_1000km: number;
   co2_per_km_per_ton: number;     // kg CO2
   reliability_base: number;       // 0–1
@@ -21,7 +21,7 @@ export const RATE_TABLE: Record<TransportMode, ModeRates> = {
   air: {
     base_per_km: 0.45,
     weight_factor: 0.90,
-    min_charge_usd: 2500,
+    min_charge_in_usd: 2500,
     base_transit_days_per_1000km: 0.15,
     co2_per_km_per_ton: 0.60,
     reliability_base: 0.92,
@@ -30,7 +30,7 @@ export const RATE_TABLE: Record<TransportMode, ModeRates> = {
   sea: {
     base_per_km: 0.03,
     weight_factor: 0.02,
-    min_charge_usd: 800,
+    min_charge_in_usd: 800,
     base_transit_days_per_1000km: 1.8,
     co2_per_km_per_ton: 0.015,
     reliability_base: 0.78,
@@ -39,7 +39,7 @@ export const RATE_TABLE: Record<TransportMode, ModeRates> = {
   rail: {
     base_per_km: 0.06,
     weight_factor: 0.04,
-    min_charge_usd: 600,
+    min_charge_in_usd: 600,
     base_transit_days_per_1000km: 0.8,
     co2_per_km_per_ton: 0.025,
     reliability_base: 0.85,
@@ -48,7 +48,7 @@ export const RATE_TABLE: Record<TransportMode, ModeRates> = {
   road: {
     base_per_km: 0.12,
     weight_factor: 0.08,
-    min_charge_usd: 300,
+    min_charge_in_usd: 300,
     base_transit_days_per_1000km: 0.6,
     co2_per_km_per_ton: 0.10,
     reliability_base: 0.88,
@@ -92,7 +92,7 @@ export function estimateCost(
     distanceKm * rates.base_per_km +
     weightTons * rates.weight_factor * distanceKm * 0.01;
 
-  return Math.max(Math.round(baseCost * surcharge), rates.min_charge_usd);
+  return Math.max(Math.round(baseCost * surcharge), rates.min_charge_in_usd);
 }
 
 export function estimateTransitDays(

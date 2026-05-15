@@ -26,7 +26,7 @@ interface CostAnalysisResult {
   disruption_impacts: any[];
   ai_recommendation: {
     recommended_mode: string;
-    estimated_cost_usd: number;
+    estimated_cost_inr: number;
     estimated_delay_days: number;
     risk_level: string;
     reason: string;
@@ -213,7 +213,7 @@ export default function CargoAnalysis() {
                 <div className="flex gap-4 border-l border-white/10 pl-6">
                   <div className="text-center">
                     <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mb-1">Cost</p>
-                    <p className="text-2xl font-bold text-white">${result.ai_recommendation.estimated_cost_usd.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-white">₹{result.ai_recommendation.estimated_cost_inr.toLocaleString()}</p>
                   </div>
                   <div className="text-center">
                     <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-widest mb-1">Transit</p>
@@ -252,7 +252,7 @@ export default function CargoAnalysis() {
                     <div className="space-y-2">
                       <div className="flex justify-between items-end">
                         <span className="text-zinc-500 text-[10px] uppercase">Cost</span>
-                        <span className="text-white text-sm font-medium">${est.adjusted_cost_usd.toLocaleString()}</span>
+                        <span className="text-white text-sm font-medium">₹{est.adjusted_cost_inr.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between items-end">
                         <span className="text-zinc-500 text-[10px] uppercase">Time</span>

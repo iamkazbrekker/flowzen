@@ -51,7 +51,8 @@ function disruptionAffectsMode(
 ): boolean {
   const keywords = MODE_KEYWORDS[mode];
   // Check affected_transport_modes from the disruption event
-  for (const affected of affectedModes) {
+  const modesToCheck = Array.isArray(affectedModes) ? affectedModes : [];
+  for (const affected of modesToCheck) {
     const lower = affected.toLowerCase();
     if (keywords.some((k) => lower.includes(k))) return true;
   }

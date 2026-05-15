@@ -10,7 +10,7 @@ import { runPipeline } from "@/lib/pipeline";
 
 export async function disruptionAgent(ctx: AgentContext): Promise<AgentContext> {
   const start = Date.now();
-  ctx.logs.push("[DisruptionAgent] Fetching active disruptions from Supabase...");
+  ctx.logs.push("[DisruptionAgent] Fetching active disruptions from NLP pipeline...");
 
   if (!ctx.route_data || !ctx.mode_estimates) {
     ctx.errors.push("[DisruptionAgent] Missing route_data or mode_estimates — skipping.");
@@ -56,7 +56,7 @@ export async function disruptionAgent(ctx: AgentContext): Promise<AgentContext> 
     if (!impact) continue;
 
     estimate.disruption_multiplier = impact.cost_multiplier;
-    estimate.adjusted_cost_usd = Math.round(estimate.base_cost_usd * impact.cost_multiplier);
+    estimate.adjusted_cost_inr = Math.round(estimate.base_cost_inr * impact.cost_multiplier);
     estimate.adjusted_transit_days =
       Math.round(estimate.transit_days * impact.delay_multiplier * 10) / 10;
     estimate.reliability_score = Math.max(

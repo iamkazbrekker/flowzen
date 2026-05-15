@@ -285,14 +285,14 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
 
             // 2. Rich rerouted path via corridor waypoints
             const from: [number, number] = [leg.from!.lat, leg.from!.lng];
-            const to:   [number, number] = [leg.to!.lat,   leg.to!.lng];
+            const to: [number, number] = [leg.to!.lat, leg.to!.lng];
             const reroutePts = await getReroutedWaypoints(altMode, from, to);
             if (!journeyLayerGroup.current) return;
 
             const altColor = altMode === "air" ? "#a78bfa"
-              : altMode === "sea"  ? "#2dd4bf"
-              : altMode === "rail" ? "#fbbf24"
-              : "#34d399"; // road
+              : altMode === "sea" ? "#2dd4bf"
+                : altMode === "rail" ? "#fbbf24"
+                  : "#34d399"; // road
 
             const altStyle = MODE_STYLE[altMode as keyof typeof MODE_STYLE] ?? { weight: 2.5, opacity: 0.9 };
 
@@ -311,7 +311,7 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
               className: "fz-leg fz-rerouted",
             });
             reroutePoly.on("mouseover", () => reroutePoly.setStyle({ opacity: 1, weight: altStyle.weight + 3 }));
-            reroutePoly.on("mouseout",  () => reroutePoly.setStyle({ opacity: 0.92, weight: altStyle.weight + 1 }));
+            reroutePoly.on("mouseout", () => reroutePoly.setStyle({ opacity: 0.92, weight: altStyle.weight + 1 }));
             reroutePoly.on("click", e => {
               L.DomEvent.stopPropagation(e);
               onLegClick?.(journey, leg);
@@ -355,7 +355,7 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
               opacity: lineOpacity, dashArray, className,
             });
             poly.on("mouseover", () => poly.setStyle({ opacity: 1, weight: lineWeight + 1.5 }));
-            poly.on("mouseout",  () => poly.setStyle({ opacity: lineOpacity, weight: lineWeight }));
+            poly.on("mouseout", () => poly.setStyle({ opacity: lineOpacity, weight: lineWeight }));
             poly.on("click", e => {
               L.DomEvent.stopPropagation(e);
               onLegClick?.(journey, leg);
@@ -380,23 +380,23 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
           alignItems: "center", justifyContent: "center", pointerEvents: "none",
           zIndex: 10,
         }}>
-          <div style={{ 
+          <div style={{
             textAlign: "center", padding: "32px", background: "rgba(5,5,20,0.75)",
-            borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(16px)" 
+            borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(16px)"
           }}>
             <div style={{ fontSize: 32, marginBottom: 16 }}>🗺️</div>
-            
+
             <div style={{ marginBottom: 12, letterSpacing: 2, color: "#ffffff44", textTransform: "uppercase", fontSize: 9 }}>
               Transport Modes
             </div>
-            
+
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginBottom: 20 }}>
               {(Object.entries(MODE_LABELS) as [JourneyMode, string][]).map(([mode, label]) => {
                 const style = MODE_STYLE[mode];
                 return (
                   <div key={mode} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ 
-                      width: 24, height: 2, 
+                    <div style={{
+                      width: 24, height: 2,
                       background: mode === 'sea' ? '#60a5fa' : mode === 'rail' ? '#fbbf24' : mode === 'road' ? '#34d399' : '#a78bfa',
                       borderTop: style.dashArray ? `2px dashed rgba(255,255,255,0.5)` : 'none',
                       opacity: 0.8
