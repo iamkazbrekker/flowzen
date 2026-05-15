@@ -82,75 +82,92 @@ export interface Lane {
 }
 
 export const LANES: Lane[] = [
-  // ── SEA ──
+  // ── SEA: South China Sea & Pacific ──
   { id:"SHA-SIN-sea", from:"SHA", to:"SIN", mode:"sea", baseRisk:0.12,
-    waypoints:[[31.23,121.47],[27,121],[22.3,114.2],[13,109],[1.26,103.82]] },
+    waypoints:[[31.23,121.47],[29.5,122.3],[25.0,121.5],[22.0,114.5],[18.0,111.5],[12.0,109.0],[7.0,106.5],[3.5,105.5],[1.26,103.82]] },
+  { id:"SHA-YOK-sea", from:"SHA", to:"YOK", mode:"sea", baseRisk:0.08,
+    waypoints:[[31.23,121.47],[31.5,124.0],[32.5,127.0],[33.5,131.0],[34.5,135.5],[35.45,139.64]] },
+  { id:"YOK-HON-sea", from:"YOK", to:"HON", mode:"sea", baseRisk:0.10,
+    waypoints:[[35.45,139.64],[37.0,150.0],[40.0,165.0],[42.0,178.0],[40.0,-175.0],[35.0,-165.0],[29.0,-160.0],[24.0,-158.5],[21.31,-157.86]] },
+  { id:"HON-LAX-sea", from:"HON", to:"LAX", mode:"sea", baseRisk:0.08,
+    waypoints:[[21.31,-157.86],[24.0,-152.0],[27.0,-143.0],[30.0,-133.0],[32.5,-124.0],[33.74,-118.27]] },
+
+  // ── SEA: Indian Ocean & Arabian Sea ──
   { id:"SIN-DXB-sea", from:"SIN", to:"DXB", mode:"sea", baseRisk:0.12,
-    waypoints:[[1.26,103.82],[5.5,95],[8,80],[10,65],[24.98,55.06]] },
+    waypoints:[[1.26,103.82],[2.5,101.5],[4.5,99.5],[6.5,95.0],[8.0,85.0],[11.0,72.0],[16.5,62.0],[20.0,58.0],[22.5,56.5],[24.0,56.0],[24.98,55.06]] },
+  { id:"MUN-DXB-sea", from:"MUN", to:"DXB", mode:"sea", baseRisk:0.08,
+    waypoints:[[22.84,69.72],[22.5,66.0],[23.0,61.0],[23.5,57.0],[24.0,55.8],[24.98,55.06]] },
+  { id:"CHN-COL-sea", from:"CHN", to:"COL", mode:"sea", baseRisk:0.07,
+    waypoints:[[13.08,80.27],[10.5,80.0],[8.5,79.5],[6.93,79.85]] },
+  { id:"COL-SIN-sea", from:"COL", to:"SIN", mode:"sea", baseRisk:0.08,
+    waypoints:[[6.93,79.85],[5.0,85.0],[3.5,91.0],[2.5,97.5],[1.8,101.5],[1.26,103.82]] },
+
+  // ── SEA: Red Sea & Suez (disrupted) ──
   { id:"DXB-ADE-sea", from:"DXB", to:"ADE", mode:"sea", baseRisk:0.28,
     disrupted:true, disruption:"Houthi attacks — Bab-el-Mandeb",
-    waypoints:[[24.98,55.06],[18,48],[12.78,45.03]] },
+    waypoints:[[24.98,55.06],[24.5,56.5],[23.0,59.5],[20.5,60.0],[16.0,53.5],[13.5,49.0],[12.78,45.03]] },
   { id:"ADE-SUE-sea", from:"ADE", to:"SUE", mode:"sea", baseRisk:0.30,
     disrupted:true, disruption:"Red Sea conflict zone",
-    waypoints:[[12.78,45.03],[20,38.5],[27,34.5],[30.58,32.33]] },
-  { id:"SUE-GIB-sea", from:"SUE", to:"GIB", mode:"sea", baseRisk:0.08,
-    waypoints:[[30.58,32.33],[35,27],[37,15],[36.14,-5.35]] },
-  { id:"GIB-RTM-sea", from:"GIB", to:"RTM", mode:"sea", baseRisk:0.07,
-    waypoints:[[36.14,-5.35],[44,-8],[48,-5],[51.92,4.48]] },
-  { id:"RTM-HAM-sea", from:"RTM", to:"HAM", mode:"sea", baseRisk:0.03,
-    waypoints:[[51.92,4.48],[53.5,7.5],[53.55,10.0]] },
-  { id:"SIN-CPT-sea", from:"SIN", to:"CPT", mode:"sea", baseRisk:0.08,
-    waypoints:[[1.26,103.82],[-5,90],[-15,70],[-25,40],[-33.91,18.42]] },
-  { id:"CPT-GIB-sea", from:"CPT", to:"GIB", mode:"sea", baseRisk:0.07,
-    waypoints:[[-33.91,18.42],[-20,5],[0,-10],[20,-20],[40,-15],[36.14,-5.35]] },
-  { id:"SHA-YOK-sea", from:"SHA", to:"YOK", mode:"sea", baseRisk:0.08,
-    waypoints:[[31.23,121.47],[33,128],[35.45,139.64]] },
-  { id:"YOK-HON-sea", from:"YOK", to:"HON", mode:"sea", baseRisk:0.10,
-    waypoints:[[35.45,139.64],[33,160],[26,-175],[21.31,-157.86]] },
-  { id:"HON-LAX-sea", from:"HON", to:"LAX", mode:"sea", baseRisk:0.08,
-    waypoints:[[21.31,-157.86],[26,-145],[30,-130],[33.74,-118.27]] },
-  { id:"MUN-DXB-sea", from:"MUN", to:"DXB", mode:"sea", baseRisk:0.08,
-    waypoints:[[22.84,69.72],[24,60],[24.98,55.06]] },
-  { id:"COL-SIN-sea", from:"COL", to:"SIN", mode:"sea", baseRisk:0.08,
-    waypoints:[[6.93,79.85],[5,90],[1.26,103.82]] },
-  { id:"CHN-COL-sea", from:"CHN", to:"COL", mode:"sea", baseRisk:0.07,
-    waypoints:[[13.08,80.27],[10,79],[6.93,79.85]] },
+    waypoints:[[12.78,45.03],[13.5,43.2],[15.0,42.0],[18.0,39.5],[22.0,37.2],[25.5,34.5],[27.5,34.0],[29.0,32.8],[30.58,32.33]] },
 
-  // ── RAIL ──
+  // ── SEA: Mediterranean & Atlantic ──
+  { id:"SUE-GIB-sea", from:"SUE", to:"GIB", mode:"sea", baseRisk:0.08,
+    waypoints:[[30.58,32.33],[31.5,30.5],[33.0,27.0],[34.5,23.0],[35.2,18.0],[36.0,13.0],[36.5,8.0],[37.0,3.0],[36.5,-1.5],[36.14,-5.35]] },
+  { id:"GIB-RTM-sea", from:"GIB", to:"RTM", mode:"sea", baseRisk:0.07,
+    waypoints:[[36.14,-5.35],[38.0,-9.5],[41.0,-11.0],[44.0,-10.0],[47.0,-8.0],[49.5,-5.0],[50.5,-2.5],[51.0,-0.5],[51.4,2.0],[51.92,4.48]] },
+  { id:"RTM-HAM-sea", from:"RTM", to:"HAM", mode:"sea", baseRisk:0.03,
+    waypoints:[[51.92,4.48],[52.5,6.0],[53.0,7.5],[53.3,8.5],[53.55,10.0]] },
+
+  // ── SEA: Cape of Good Hope ──
+  { id:"SIN-CPT-sea", from:"SIN", to:"CPT", mode:"sea", baseRisk:0.08,
+    waypoints:[[1.26,103.82],[-3.0,97.0],[-8.0,87.0],[-12.0,75.0],[-17.0,62.0],[-22.0,47.0],[-27.0,32.0],[-31.0,24.0],[-33.91,18.42]] },
+  { id:"CPT-GIB-sea", from:"CPT", to:"GIB", mode:"sea", baseRisk:0.07,
+    waypoints:[[-33.91,18.42],[-30.0,14.0],[-25.0,8.0],[-17.0,0.0],[-8.0,-5.0],[0.0,-10.0],[8.0,-15.0],[15.0,-18.0],[22.0,-17.0],[28.0,-13.0],[32.5,-10.0],[35.0,-7.0],[36.14,-5.35]] },
+
+  // ── RAIL: India ──
   { id:"DEL-BLR-rail", from:"DEL", to:"BLR", mode:"rail", baseRisk:0.04,
-    waypoints:[[28.63,77.21],[25.4,81.9],[21.1,79.1],[18.5,73.9],[12.97,77.59]] },
+    // Delhi → Agra → Gwalior → Jhansi → Bhopal → Itarsi → Nagpur → Kazipet → Hyderabad → Guntakal → Bengaluru
+    waypoints:[[28.63,77.21],[27.18,78.01],[26.22,78.18],[25.45,78.57],[23.26,77.40],[22.61,77.75],[21.15,79.09],[18.43,79.13],[17.99,79.46],[17.39,78.47],[15.45,76.98],[12.97,77.59]] },
   { id:"MUN-DEL-rail", from:"MUN", to:"DEL", mode:"rail", baseRisk:0.05,
-    waypoints:[[22.84,69.72],[23.5,72.5],[26.9,75.8],[28.63,77.21]] },
-  { id:"SHA-IST-rail", from:"SHA", to:"IST", mode:"rail", baseRisk:0.15,
-    waypoints:[[31.23,121.47],[40,90],[45,65],[41.01,28.97]] },
-  { id:"IST-MAD-rail", from:"IST", to:"MAD", mode:"rail", baseRisk:0.08,
-    waypoints:[[41.01,28.97],[42,20],[43,5],[40.42,-3.70]] },
-  { id:"MAD-RTM-rail", from:"MAD", to:"RTM", mode:"rail", baseRisk:0.05,
-    waypoints:[[40.42,-3.70],[44,0],[48,2],[51.92,4.48]] },
-  { id:"IST-RTM-rail", from:"IST", to:"RTM", mode:"rail", baseRisk:0.07,
-    waypoints:[[41.01,28.97],[44,15],[48,8],[51.92,4.48]] },
+    // Mundra → Gandhidham → Ahmedabad → Vadodara → Ratlam → Kota → Mathura → Delhi
+    waypoints:[[22.84,69.72],[23.08,70.13],[23.03,72.58],[22.30,73.20],[23.33,75.04],[25.18,75.85],[27.49,77.67],[28.63,77.21]] },
   { id:"CHN-BLR-rail", from:"CHN", to:"BLR", mode:"rail", baseRisk:0.06,
-    waypoints:[[13.08,80.27],[13,79.5],[12.97,77.59]] },
+    waypoints:[[13.08,80.27],[13.0,79.5],[12.97,77.59]] },
+
+  // ── RAIL: Belt & Road (China-Europe) ──
+  { id:"SHA-IST-rail", from:"SHA", to:"IST", mode:"rail", baseRisk:0.15,
+    // Shanghai → Xi'an → Lanzhou → Urumqi → Almaty → Tashkent → Ashgabat → Tehran → Ankara → Istanbul
+    waypoints:[[31.23,121.47],[34.27,108.95],[36.06,103.83],[43.79,87.62],[43.25,76.95],[41.30,69.24],[37.95,58.38],[35.69,51.39],[39.93,32.87],[41.01,28.97]] },
+  { id:"IST-RTM-rail", from:"IST", to:"RTM", mode:"rail", baseRisk:0.07,
+    // Istanbul → Sofia → Belgrade → Budapest → Vienna → Frankfurt → Cologne → Rotterdam
+    waypoints:[[41.01,28.97],[42.70,23.32],[44.80,20.46],[47.50,19.04],[48.21,16.37],[48.14,11.58],[50.11,8.68],[50.94,6.96],[51.92,4.48]] },
+  { id:"IST-MAD-rail", from:"IST", to:"MAD", mode:"rail", baseRisk:0.08,
+    // Istanbul → Thessaloniki → Rome → Marseille → Barcelona → Madrid
+    waypoints:[[41.01,28.97],[40.63,22.94],[41.89,12.51],[43.30,5.37],[41.39,2.17],[40.42,-3.70]] },
+  { id:"MAD-RTM-rail", from:"MAD", to:"RTM", mode:"rail", baseRisk:0.05,
+    // Madrid → Pamplona → Montpellier → Lyon → Paris → Brussels → Rotterdam
+    waypoints:[[40.42,-3.70],[42.82,-1.65],[43.61,3.88],[45.75,4.84],[48.86,2.35],[50.84,4.35],[51.92,4.48]] },
 
   // ── ROAD ──
   { id:"BLR-CHN-road", from:"BLR", to:"CHN", mode:"road", baseRisk:0.08,
-    waypoints:[[12.97,77.59],[12.5,78.5],[13.08,80.27]] },
+    waypoints:[[12.97,77.59],[12.97,78.5],[13.08,80.27]] },
   { id:"DXB-IST-road", from:"DXB", to:"IST", mode:"road", baseRisk:0.18,
-    waypoints:[[24.98,55.06],[30,48],[36,36],[41.01,28.97]] },
+    // Dubai → Abu Dhabi → Dammam → Kuwait → Amman → Damascus → Ankara → Istanbul
+    waypoints:[[24.98,55.06],[24.46,54.37],[26.43,50.10],[29.36,47.98],[31.95,35.93],[34.80,36.71],[39.93,32.87],[41.01,28.97]] },
   { id:"RTM-HAM-road", from:"RTM", to:"HAM", mode:"road", baseRisk:0.04,
-    waypoints:[[51.92,4.48],[52.5,7],[53.55,10.0]] },
+    waypoints:[[51.92,4.48],[52.37,4.89],[52.87,5.99],[52.52,7.06],[53.07,8.80],[53.55,10.00]] },
 
   // ── AIR ──
   { id:"SHA-DXB-air", from:"SHA", to:"DXB", mode:"air", baseRisk:0.03,
-    waypoints:[[31.23,121.47],[28,90],[24.98,55.06]] },
+    waypoints:[[31.23,121.47],[29.0,100.0],[26.0,80.0],[24.98,55.06]] },
   { id:"DXB-RTM-air", from:"DXB", to:"RTM", mode:"air", baseRisk:0.03,
-    waypoints:[[24.98,55.06],[40,25],[51.92,4.48]] },
+    waypoints:[[24.98,55.06],[35.0,25.0],[44.0,12.0],[51.92,4.48]] },
   { id:"DEL-DXB-air", from:"DEL", to:"DXB", mode:"air", baseRisk:0.03,
-    waypoints:[[28.63,77.21],[26,66],[24.98,55.06]] },
+    waypoints:[[28.63,77.21],[26.5,66.0],[24.98,55.06]] },
   { id:"SHA-LAX-air", from:"SHA", to:"LAX", mode:"air", baseRisk:0.03,
-    waypoints:[[31.23,121.47],[45,160],[33.74,-118.27]] },
+    waypoints:[[31.23,121.47],[40.0,155.0],[45.0,180.0],[40.0,-155.0],[33.74,-118.27]] },
   { id:"DEL-RTM-air", from:"DEL", to:"RTM", mode:"air", baseRisk:0.03,
-    waypoints:[[28.63,77.21],[38,45],[51.92,4.48]] },
+    waypoints:[[28.63,77.21],[38.0,50.0],[45.0,25.0],[51.92,4.48]] },
 ];
 
 // ─── ROUTE RESULT ─────────────────────────────────────────────────────────────
