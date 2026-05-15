@@ -1,152 +1,276 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import {
-  Menu,
-  Search,
-  Bell,
-  Settings,
-  X,
-  CloudLightning,
-  Anchor,
-  Brain,
-  Send,
-  Plus,
-  Minus,
-  Globe,
-  Layers,
-  Target,
-  AlertTriangle,
-  TrendingUp,
-  Clock,
-  DollarSign,
-  Activity
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import dynamic from 'next/dynamic';
-import TextScramble from './components/TextScramble';
-import type { DisplayRoute, RouteResult } from './data/routing';
-import { MODE_PROFILES, compareStrategies } from './data/routing';
+  Search, Bell, Settings, Plus, Minus, Globe,
+  X, Route, Trash2, ChevronRight, Layers,
+} from "lucide-react";
+import dynamic from "next/dynamic";
+import type { MapHandle } from "./components/Map";
+import JourneyBuilder, { type Journey, type JourneyLeg } from "./components/JourneyBuilder";
+import { useDisruptionAgent } from "../hooks/useDisruptionAgent";
+import DisruptionAlertBanner from "./components/DisruptionAlertBanner";
+import SimulationPanel from "./components/SimulationPanel";
+import JourneyChatbot from "./components/JourneyChatbot";
+import type { DisruptionEvent } from "../lib/types";
 
-const Map = dynamic(() => import('./components/Map'), { ssr: false });
+// Leaflet must load client-side only
+const Map = dynamic(() => import("./components/Map"), { ssr: false });
 import CargoAnalysis from './components/CargoAnalysis';
 
-// --- Constants & Types ---
-
-
-interface Message {
-  role: 'ai' | 'user';
-  text: string;
+// ── Text Scramble Effect ──────────────────────────────────────────────────────
+const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+function TextScramble({ text, delay = 0 }: { text: string; delay?: number }) {
+  const [display, setDisplay] = useState(text);
+  const ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  return (
+    <span
+      onMouseEnter={() => {
+        if (ref.current) clearTimeout(ref.current);
+        let iter = 0;
+        const iv = setInterval(() => {
+          setDisplay(text.split("").map((c, i) => {
+            if (i < iter) return text[i];
+            return c === " " ? " " : CHARS[Math.floor(Math.random() * CHARS.length)];
+          }).join(""));
+          if (iter >= text.length) { clearInterval(iv); setDisplay(text); }
+          iter += 0.5;
+        }, 30);
+      }}
+    >
+      {display}
+    </span>
+  );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [showPanels, setShowPanels] = useState(false);
-  const [selectedRoute, setSelectedRoute] = useState<DisplayRoute | null>(null);
-  const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
+  const mapRef = useRef<MapHandle>(null);
+  const [journeys, setJourneys] = useState<Journey[]>([]);
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
+  const [selectedLeg, setSelectedLeg] = useState<JourneyLeg | null>(null);
   const [showCargoAnalysis, setShowCargoAnalysis] = useState(false);
-  const [transitSpeed, setTransitSpeed] = useState(70);
-  const [costCeiling, setCostCeiling] = useState(40);
-  const [messages] = useState<Message[]>([
-    { role: 'ai', text: "Analyzing Suez congestion. I recommend diverting Tier 1 cargo via Cape Route. ETA penalty: +9 days. OpEx increase: +14%. Shall I formalize the reroute?" }
-  ]);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [simulatedDisruptions, setSimulatedDisruptions] = useState<DisruptionEvent[]>([]);
 
-  const handleRouteClick = (route: DisplayRoute, result: RouteResult) => {
-    setSelectedRoute(route);
-    setRouteResult(result);
-    setShowPanels(true);
+  const handleAddSim = useCallback((d: DisruptionEvent) => {
+    setSimulatedDisruptions(prev => [...prev, d]);
+  }, []);
+  const handleRemoveSim = useCallback((idx: number) => {
+    setSimulatedDisruptions(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+  const handleClearSim = useCallback(() => setSimulatedDisruptions([]), []);
+
+  // ── Disruption Agent ──────────────────────────────────────────────────────
+  const {
+    disruptions,
+    analyses,
+    loading: agentLoading,
+    lastFetched,
+    criticalAlerts,
+    getLegAnalysis,
+  } = useDisruptionAgent(journeys, simulatedDisruptions);
+
+  const refreshAgent = useCallback(() => {
+    setJourneys(prev => [...prev]);
+  }, []);
+
+  const handleAddJourney = useCallback((journey: Journey) => {
+    setJourneys(prev => {
+      const exists = prev.find(j => j.id === journey.id);
+      if (exists) return prev.map(j => j.id === journey.id ? journey : j);
+      return [...prev, journey];
+    });
+    setSelectedJourney(journey);
+    setShowSidebar(true);
+    // Don't setShowBuilder(true) here — the builder closes itself via onClose()
+    setTimeout(() => mapRef.current?.focusJourney(journey), 400);
+  }, []);
+
+  const handleRemoveJourney = useCallback((id: string) => {
+    setJourneys(prev => prev.filter(j => j.id !== id));
+    setSelectedJourney(prev => {
+      if (prev?.id === id) { setShowSidebar(false); setShowBuilder(false); return null; }
+      return prev;
+    });
+  }, []);
+
+  const handleLegClick = useCallback((journey: Journey, leg: JourneyLeg) => {
+    setSelectedJourney(journey);
+    setSelectedLeg(leg);
+    setShowSidebar(true);
+    setShowBuilder(true);
+  }, []);
+
+  const MODE_META: Record<string, { emoji: string; label: string; color: string; unit: string; speed: number }> = {
+    sea:  { emoji:"⚓", label:"Maritime",  color:"#60a5fa", unit:"knots", speed:15 },
+    rail: { emoji:"🚂", label:"Rail",      color:"#00ff88", unit:"km/h",  speed:120 },
+    road: { emoji:"🚛", label:"Road",      color:"#f59e0b", unit:"km/h",  speed:80 },
+    air:  { emoji:"✈", label:"Air Cargo", color:"#e879f9", unit:"km/h",  speed:850 },
   };
 
-  const togglePanels = () => setShowPanels(p => !p);
+  // Simple haversine
+  const dist = (a: [number,number], b: [number,number]) => {
+    const R = 6371, toR = Math.PI/180;
+    const dLat = (b[0]-a[0])*toR, dLng = (b[1]-a[1])*toR;
+    const s = Math.sin(dLat/2)**2 + Math.cos(a[0]*toR)*Math.cos(b[0]*toR)*Math.sin(dLng/2)**2;
+    return Math.round(R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s)));
+  };
 
   return (
-    <div className="h-screen w-full flex flex-row bg-background selection:bg-primary selection:text-background font-sans overflow-hidden">
+    <div style={{ width:"100vw", height:"100vh", background:"#050508", overflow:"hidden", position:"relative", fontFamily:"'Inter', sans-serif" }}>
 
+      {/* ── DISRUPTION BANNER ───────────────────────────────────────────────── */}
+      <DisruptionAlertBanner
+        criticalAlerts={criticalAlerts}
+        loading={agentLoading}
+        lastFetched={lastFetched}
+        disruptionCount={disruptions.length}
+        onRefresh={refreshAgent}
+      />
 
-      {/* --- MAIN EXPLORER --- */}
-      <section className="flex-1 flex flex-col min-w-0 relative">
-        {/* --- TOP HEADER --- */}
-        <header className="h-20 border-b border-white/5 flex items-center justify-between px-10 z-50 bg-background/50 backdrop-blur-xl">
-          <div className="flex items-center gap-4">
-            <div className="w-1 h-1 rounded-full bg-white/20"></div>
-            <h1 className="font-serif italic text-2xl text-white">Flowzen</h1>
-          </div>
-
-          <div className="flex-1 max-w-lg px-12 hidden lg:block">
-            <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-white transition-colors" />
-              <input
-                type="text"
-                placeholder="Search Infrastructure..."
-                className="w-full bg-transparent border-b border-white/10 py-2 pl-10 pr-4 text-xs font-mono focus:border-white outline-none transition-all placeholder:text-white/20"
-              />
+      {/* ── TOP BAR ──────────────────────────────────────────────────────────── */}
+      <header style={{
+        position:"fixed", top:0, left:0, right:0, height:56, zIndex:500,
+        display:"flex", alignItems:"center", padding:"0 20px", gap:16,
+        background:"rgba(5,5,8,0.88)", borderBottom:"1px solid rgba(255,255,255,0.06)",
+        backdropFilter:"blur(16px)",
+      }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <div style={{
+            width:28, height:28, borderRadius:6, background:"linear-gradient(135deg,#60a5fa,#818cf8)",
+            display:"flex", alignItems:"center", justifyContent:"center", fontSize:14,
+          }}>⬡</div>
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:"#fff", letterSpacing:0.5 }}>
+              <TextScramble text="FLOWZEN" />
             </div>
+            <div style={{ fontSize:8, color:"#ffffff33", letterSpacing:3, textTransform:"uppercase" }}>Logistics Engine</div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-8">
-            <div className="flex -space-x-2">
-              {["JD", "AS", "+3"].map((tag, i) => (
-                <div key={i} className="w-8 h-8 rounded-full bg-surface-bright border border-background flex items-center justify-center text-[10px] text-white/60">
-                  {tag}
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-4">
-              <button 
-                onClick={() => setShowCargoAnalysis(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600/10 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-bold uppercase tracking-wider hover:bg-blue-600/20 transition-all"
-              >
-                <Brain className="w-4 h-4" />
-                AI Analysis
-              </button>
-              <Bell className="w-5 h-5 text-white/40 hover:text-white transition-colors cursor-pointer" />
-              <div
-                className="h-8 w-8 rounded-full bg-surface-bright border border-white/5 overflow-hidden cursor-pointer hover:border-white/20 transition-all"
-                onClick={togglePanels}
-              >
+        <div style={{ flex:1 }} />
+
+        {/* Journey list chips */}
+        <div style={{ display:"flex", gap:6, alignItems:"center", overflow:"hidden" }}>
+          {journeys.map(j => (
+            <button key={j.id}
+              onClick={() => { 
+                setSelectedJourney(j); 
+                setShowSidebar(true); 
+                setShowBuilder(true);
+                mapRef.current?.focusJourney(j); 
+              }}
+              style={{
+                display:"flex", alignItems:"center", gap:6, padding:"4px 10px 4px 6px",
+                background: selectedJourney?.id === j.id ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.04)",
+                border:`1px solid ${selectedJourney?.id === j.id ? "rgba(96,165,250,0.4)" : "rgba(255,255,255,0.08)"}`,
+                borderRadius:20, cursor:"pointer", color:"#fff", fontSize:10,
+                transition:"all 0.15s",
+              }}>
+              <div style={{ display:"flex", gap:2 }}>
+                {j.legs.map((l,i) => (
+                  <div key={i} style={{ width:6, height:6, borderRadius:"50%", background: l.color ?? "#60a5fa" }} />
+                ))}
               </div>
-            </div>
-          </div>
-        </header>
-
-        {/* --- MAP INTERFACE --- */}
-        <main className="flex-1 relative bg-surface-container-lowest overflow-hidden">
-          <div className="scanline" />
-
-          <div className="absolute inset-0">
-            <Map onRouteClick={handleRouteClick} />
-            <div className="absolute inset-0 map-gradient-overlay pointer-events-none" />
-          </div>
-
-          {/* Floating UI: System Feed */}
-          <div className="absolute bottom-10 left-10 z-10 flex flex-col gap-6">
-            <div className="bg-surface-dim/80 backdrop-blur-xl border border-white/5 p-6 rounded-3xl w-72">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold">System Feed</h3>
-                <div className="w-2 h-2 rounded-full bg-emerald-500 glow-led" />
+              {j.name}
+              <div onClick={e => { e.stopPropagation(); handleRemoveJourney(j.id); }}
+                style={{ marginLeft:2, color:"#ffffff44", lineHeight:1 }}>
+                <X style={{ width:8, height:8 }} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-[9px] text-white/20 uppercase tracking-widest mb-0.5">Latency</div>
-                  <div className="font-mono text-xs text-white">12MS</div>
-                </div>
-                <div>
-                  <div className="text-[9px] text-white/20 uppercase tracking-widest mb-0.5">Uptime</div>
-                  <div className="font-mono text-xs text-white">99.9%</div>
-                </div>
-              </div>
-            </div>
+            </button>
+          ))}
+        </div>
 
-            <div className="flex gap-2">
-              <button className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white hover:text-black transition-all">
-                <Plus className="w-4 h-4" />
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <div style={{
+            display:"flex", alignItems:"center", gap:6,
+            background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)",
+            borderRadius:8, padding:"6px 12px",
+          }}>
+            <Search style={{ width:12, height:12, color:"#ffffff44" }} />
+            <span style={{ fontSize:11, color:"#ffffff33" }}>Search…</span>
+          </div>
+          <Bell style={{ width:16, height:16, color:"#ffffff44", cursor:"pointer" }} />
+          <Settings style={{ width:16, height:16, color:"#ffffff44", cursor:"pointer" }} />
+        </div>
+      </header>
+
+      {/* ── MAP ──────────────────────────────────────────────────────────────── */}
+      <main style={{ position:"absolute", inset:0, top:56 }}>
+        <div style={{ position:"relative", width:"100%", height:"100%" }}>
+          {/* Map fills full container */}
+          <div style={{ position:"absolute", inset:0, zIndex:0 }}>
+            <Map ref={mapRef} journeys={journeys} onLegClick={handleLegClick} analyses={analyses} />
+          </div>
+
+          {/* Scanline overlay */}
+          <div style={{
+            position:"absolute", inset:0, pointerEvents:"none", zIndex:1000,
+            background:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px)",
+          }} />
+
+          {/* ── MAP CONTROLS ───────────────────────────────────────────────── */}
+          <div style={{
+            position:"absolute", bottom:24, left:24, zIndex:1001,
+            display:"flex", flexDirection:"column", gap:12,
+          }}>
+            {/* New Journey Button */}
+            <button
+              onClick={() => { setSelectedJourney(null); setShowSidebar(false); setShowBuilder(true); }}
+              style={{
+                display:"flex", alignItems:"center", gap:10, padding:"12px 18px",
+                background:"linear-gradient(135deg, #60a5fa, #818cf8)",
+                border:"none", borderRadius:14, cursor:"pointer", color:"#fff",
+                fontSize:13, fontWeight:600, boxShadow:"0 4px 24px rgba(96,165,250,0.35)",
+                transition:"all 0.2s",
+              }}
+              onMouseOver={e => { e.currentTarget.style.transform="scale(1.03)"; e.currentTarget.style.boxShadow="0 6px 32px rgba(96,165,250,0.5)"; }}
+              onMouseOut={e => { e.currentTarget.style.transform="scale(1)"; e.currentTarget.style.boxShadow="0 4px 24px rgba(96,165,250,0.35)"; }}
+            >
+              <Route style={{ width:16, height:16 }} />
+              New Journey
+            </button>
+
+            {/* Zoom controls */}
+            <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+              <button onClick={() => mapRef.current?.resetView()}
+                style={ctrlBtnStyle}
+                title="Reset view">
+                <Globe style={{ width:14, height:14 }} />
               </button>
-              <button className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white hover:text-black transition-all">
-                <Minus className="w-4 h-4" />
+              <button onClick={() => mapRef.current?.zoomIn()} style={{ ...ctrlBtnStyle, borderRadius:"0 0 0 0", borderBottom:"none" }}>
+                <Plus style={{ width:14, height:14 }} />
+              </button>
+              <button onClick={() => mapRef.current?.zoomOut()} style={{ ...ctrlBtnStyle, borderRadius:"0 0 8px 8px" }}>
+                <Minus style={{ width:14, height:14 }} />
               </button>
             </div>
           </div>
-        </main>
-      </section>
+
+          {/* Coordinates display */}
+          <div style={{
+            position:"absolute", bottom:24, right: showSidebar ? 420 : 24,
+            zIndex:1001, fontFamily:"monospace", fontSize:9,
+            color:"#ffffff22", letterSpacing:1, transition:"right 0.3s",
+          }}>
+            FLOWZEN LOGISTICS PLATFORM v2.0 • OSRM ROUTING
+          </div>
+        </div>
+      </main>
+
+      {/* ── JOURNEY BUILDER PANEL ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showBuilder && (
+          <JourneyBuilder
+            onClose={() => setShowBuilder(false)}
+            onAdd={handleAddJourney}
+            initialJourney={selectedJourney}
+          />
+        )}
+      </AnimatePresence>
 
       {/* --- CARGO ANALYSIS MODAL --- */}
       <AnimatePresence>
@@ -175,297 +299,214 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* --- SLIDE PANELS --- */}
+      {/* ── ROUTE INTELLIGENCE PANEL ───────────────────────────────────────── */}
       <AnimatePresence>
-        {showPanels && (
-          <>
-            {/* Left Panel: Metrics */}
-            <motion.aside
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              className="fixed left-0 top-20 bottom-12 w-[400px] bg-surface-dim/95 backdrop-blur-2xl border-r border-t border-white/5 z-[9999] p-6 flex flex-col gap-6"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-white/40 mb-2 block">
-                    <TextScramble text="Route Intelligence" />
-                  </span>
-                  <h2 className="text-xl font-serif text-white leading-tight">
-                    <TextScramble text={selectedRoute?.label ?? "Select a Route"} delay={200} />
-                  </h2>
-                </div>
-                <button onClick={() => setShowPanels(false)} className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
+        {showSidebar && selectedJourney && (
+          <motion.aside
+            initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
+            transition={{ type:"spring", stiffness:300, damping:30 }}
+            style={{
+              position:"fixed", left:0, top:56, bottom:0, width:400,
+              background:"rgba(6,6,16,0.97)", borderRight:"1px solid rgba(255,255,255,0.07)",
+              backdropFilter:"blur(20px)", zIndex:400,
+              display:"flex", flexDirection:"column",
+            }}
+          >
+            <div style={{ padding:"16px 20px", borderBottom:"1px solid rgba(255,255,255,0.06)", display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:8, letterSpacing:3, color:"#ffffff33", textTransform:"uppercase", marginBottom:3 }}>Route Intelligence</div>
+                <div style={{ fontSize:16, fontWeight:600, color:"#fff" }}>{selectedJourney.name}</div>
               </div>
+              <button onClick={() => { setShowSidebar(false); setSelectedLeg(null); }}
+                style={{ width:32, height:32, borderRadius:"50%", background:"rgba(255,255,255,0.05)",
+                  border:"1px solid rgba(255,255,255,0.1)", cursor:"pointer", display:"flex",
+                  alignItems:"center", justifyContent:"center", color:"#fff" }}>
+                <X style={{ width:14, height:14 }} />
+              </button>
+            </div>
 
-              <div className="flex flex-col gap-4 overflow-y-auto pr-2 scrollbar-thin">
+            <div style={{ flex:1, overflowY:"auto", padding:"16px 20px" }}>
+              {selectedJourney.legs.map((leg, idx) => {
+                const meta = MODE_META[leg.mode];
+                const color = leg.color ?? "#60a5fa";
+                const isSelected = selectedLeg?.id === leg.id;
+                const distKm = leg.from && leg.to ? dist([leg.from.lat, leg.from.lng], [leg.to.lat, leg.to.lng]) : 0;
+                const durationHr = meta ? Math.round(distKm / meta.speed * 10) / 10 : 0;
+                
+                const legAnalysis = getLegAnalysis(leg.id);
+                const sevColors: Record<string, string> = {
+                  critical: "#f87171", high: "#fb923c", medium: "#fbbf24", low: "#818cf8", none: "#4ade80"
+                };
+                const alertColor = legAnalysis?.result?.severity ? sevColors[legAnalysis.result.severity] : undefined;
 
-                {/* Hop path */}
-                {routeResult && (
-                  <section>
-                    <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-3">Computed Path</h3>
-                    <div className="flex flex-wrap gap-1">
-                      {routeResult.path.map((p, i) => (
-                        <span key={`${p}-${i}`} className="flex items-center gap-1">
-                          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono text-white/80">{p}</span>
-                          {i < routeResult.path.length - 1 && <span className="text-white/20 text-[9px]">→</span>}
-                        </span>
-                      ))}
+                return (
+                  <div key={leg.id}
+                    onClick={() => setSelectedLeg(isSelected ? null : leg)}
+                    style={{
+                      marginBottom:12, background: isSelected ? `${color}0d` : "rgba(255,255,255,0.02)",
+                      border: `1px solid ${isSelected ? `${color}33` : "rgba(255,255,255,0.06)"}`,
+                      borderRadius:12, overflow:"hidden", cursor:"pointer", transition:"all 0.2s",
+                    }}
+                  >
+                    <div style={{ display:"flex", alignItems:"center", padding:"10px 12px", gap:10 }}>
+                      <div style={{ width:3, height:36, background:color, borderRadius:2, flexShrink:0 }} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:9, color: legAnalysis?.result?.affected ? alertColor : color, textTransform:"uppercase", letterSpacing:1.5, marginBottom:3, display:"flex", alignItems:"center", gap:6 }}>
+                          {meta.emoji} {meta.label} · Leg {idx+1}
+                          {legAnalysis?.loading && (
+                            <span style={{ fontSize:7, color:"#ffffff33", letterSpacing:1 }}>SCANNING…</span>
+                          )}
+                          {legAnalysis?.result?.affected && !legAnalysis.loading && (
+                            <span style={{ fontSize:7, padding:"1px 5px", borderRadius:8,
+                              background: `${alertColor}22`, border:`1px solid ${alertColor}44`,
+                              color: alertColor, letterSpacing:1 }}>
+                              ⚠ {legAnalysis.result.severity?.toUpperCase()}
+                            </span>
+                          )}
+                          {legAnalysis?.result?.rerouted && (
+                            <span style={{ fontSize:7, padding:"1px 5px", borderRadius:8,
+                              background:"rgba(96,165,250,0.15)", border:"1px solid rgba(96,165,250,0.3)",
+                              color:"#60a5fa", letterSpacing:1 }}>↪ REROUTED</span>
+                          )}
+                        </div>
+                        <div style={{ fontSize:11, color:"#fff", fontFamily:"monospace", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                          {leg.from?.name ?? "—"} → {leg.to?.name ?? "—"}
+                        </div>
+                      </div>
+                      <ChevronRight style={{ width:12, height:12, color:"#ffffff33",
+                        transform: isSelected ? "rotate(90deg)" : "none", transition:"transform 0.2s" }} />
                     </div>
-                  </section>
-                )}
 
-                {/* Segment breakdown */}
-                {routeResult && routeResult.segments.length > 0 && (
-                  <section>
-                    <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-3">Segment Breakdown</h3>
-                    <div className="flex flex-col gap-2">
-                      {routeResult.segments.map((seg, i) => {
-                        const p = MODE_PROFILES[seg.mode];
-                        return (
-                          <div key={i} className="p-3 rounded-lg bg-surface border border-white/5 flex gap-3 items-start">
-                            <div style={{ width:3, borderRadius:2, background: seg.disrupted ? '#ff4444' : p.color, flexShrink:0, alignSelf:'stretch' }} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] font-mono" style={{ color: seg.disrupted ? '#ff4444' : p.color }}>{p.label.toUpperCase()}{seg.disrupted ? ' ⚠' : ''}</span>
-                                <span className="text-[9px] font-mono text-white/40">{seg.from} → {seg.to}</span>
+                    <AnimatePresence>
+                      {isSelected && leg.from && leg.to && (
+                        <motion.div
+                          initial={{ height:0 }} animate={{ height:"auto" }} exit={{ height:0 }}
+                          style={{ overflow:"hidden" }}>
+                          <div style={{ padding:"0 12px 12px 25px", display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                            {[
+                              { label:"Distance", val:`~${distKm.toLocaleString()} km` },
+                              { label:"Duration", val: durationHr > 24 ? `~${(durationHr/24).toFixed(1)} days` : `~${durationHr} hrs` },
+                              { label:"Speed",    val:`${meta.speed} ${meta.unit}` },
+                            ].map(item => (
+                              <div key={item.label} style={{ background:"rgba(0,0,0,0.3)", borderRadius:8, padding:"8px 10px" }}>
+                                <div style={{ fontSize:7, color:"#ffffff33", textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>{item.label}</div>
+                                <div style={{ fontSize:11, color:"#fff", fontFamily:"monospace" }}>{item.val}</div>
                               </div>
-                              <div className="grid grid-cols-3 gap-2">
-                                <div>
-                                  <div className="text-[8px] text-white/30 uppercase">Dist</div>
-                                  <div className="text-[10px] font-mono text-white/70">{seg.distanceKm.toLocaleString()}km</div>
-                                </div>
-                                <div>
-                                  <div className="text-[8px] text-white/30 uppercase">Time</div>
-                                  <div className="text-[10px] font-mono text-white/70">{seg.durationHr > 24 ? `${(seg.durationHr/24).toFixed(1)}d` : `${seg.durationHr}h`}</div>
-                                </div>
-                                <div>
-                                  <div className="text-[8px] text-white/30 uppercase">CO₂</div>
-                                  <div className="text-[10px] font-mono text-white/70">{seg.co2Kg}kg</div>
+                            ))}
+                          </div>
+                          {/* Coordinates */}
+                          <div style={{ padding:"0 12px 12px 25px", display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                            {[
+                              { label:"Origin", loc: leg.from },
+                              { label:"Destination", loc: leg.to },
+                            ].map(item => item.loc && (
+                              <div key={item.label} style={{ background:"rgba(0,0,0,0.3)", borderRadius:8, padding:"8px 10px" }}>
+                                <div style={{ fontSize:7, color:"#ffffff33", textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>{item.label}</div>
+                                <div style={{ fontSize:9, color:`${color}cc`, fontFamily:"monospace", marginBottom:2 }}>{item.loc.name}</div>
+                                <div style={{ fontSize:8, color:"#ffffff33", fontFamily:"monospace" }}>
+                                  {item.loc.lat.toFixed(3)}, {item.loc.lng.toFixed(3)}
                                 </div>
                               </div>
-                            </div>
+                            ))}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                )}
-
-                {/* Summary metrics */}
-                {routeResult && (
-                  <section className="grid grid-cols-2 gap-2">
-                    <div className="p-3 rounded-xl bg-surface border border-white/5">
-                      <div className="flex items-center gap-1.5 mb-1"><DollarSign className="w-3 h-3 text-white/30" /><p className="text-[8px] uppercase tracking-widest text-white/30">Total Cost</p></div>
-                      <div className="text-lg font-serif">${routeResult.totalCostUSD.toLocaleString()}</div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-surface border border-white/5">
-                      <div className="flex items-center gap-1.5 mb-1"><Clock className="w-3 h-3 text-white/30" /><p className="text-[8px] uppercase tracking-widest text-white/30">Duration</p></div>
-                      <div className="text-lg font-serif">{(routeResult.totalDurationHr / 24).toFixed(1)}d</div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-surface border border-white/5">
-                      <div className="flex items-center gap-1.5 mb-1"><Activity className="w-3 h-3 text-white/30" /><p className="text-[8px] uppercase tracking-widest text-white/30">Risk</p></div>
-                      <div className={`text-lg font-serif ${routeResult.riskScore > 0.2 ? 'text-red-400' : 'text-emerald-400'}`}>{(routeResult.riskScore * 100).toFixed(0)}%</div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-surface border border-white/5">
-                      <div className="flex items-center gap-1.5 mb-1"><TrendingUp className="w-3 h-3 text-white/30" /><p className="text-[8px] uppercase tracking-widest text-white/30">CO₂</p></div>
-                      <div className="text-lg font-serif">{routeResult.totalCo2Kg.toLocaleString()}kg</div>
-                    </div>
-                  </section>
-                )}
-
-                {/* Monte Carlo */}
-                {routeResult && (
-                  <section>
-                    <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-3">Monte Carlo — {routeResult.monteCarlo.simulations.toLocaleString()} runs</h3>
-                    <div className="p-3 rounded-xl bg-surface border border-white/5 flex flex-col gap-2">
-                      {[
-                        { label: "P50 Cost",   val: `$${routeResult.monteCarlo.p50Cost.toLocaleString()}`, danger: false },
-                        { label: "P95 Cost",   val: `$${routeResult.monteCarlo.p95Cost.toLocaleString()}`, danger: true },
-                        { label: "P50 Duration", val: `${(routeResult.monteCarlo.p50Duration/24).toFixed(1)}d`, danger: false },
-                        { label: "P95 Duration", val: `${(routeResult.monteCarlo.p95Duration/24).toFixed(1)}d`, danger: true },
-                      ].map(row => (
-                        <div key={row.label} className="flex justify-between text-[10px]">
-                          <span className="text-white/40 uppercase tracking-wider">{row.label}</span>
-                          <span className={`font-mono ${row.danger ? 'text-red-400' : 'text-white'}`}>{row.val}</span>
-                        </div>
-                      ))}
-                      <div className="mt-1">
-                        <div className="flex justify-between text-[10px] mb-1">
-                          <span className="text-white/40 uppercase tracking-wider">Delay Probability</span>
-                          <span className={`font-mono ${routeResult.monteCarlo.delayProbability > 30 ? 'text-red-400' : 'text-emerald-400'}`}>{routeResult.monteCarlo.delayProbability}%</span>
-                        </div>
-                        <div className="w-full h-0.5 bg-white/5 rounded-full overflow-hidden">
-                          <motion.div initial={{ width:0 }} animate={{ width:`${routeResult.monteCarlo.delayProbability}%` }} transition={{ duration:1 }}
-                            className={`h-full ${routeResult.monteCarlo.delayProbability > 30 ? 'bg-red-500' : 'bg-emerald-500'}`} />
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-                )}
-
-                {/* Strategy compare */}
-                {selectedRoute && routeResult && (
-                  <section>
-                    <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-3">Strategy Comparison</h3>
-                    <div className="flex flex-col gap-2">
-                      {compareStrategies(selectedRoute.from, selectedRoute.to).slice(0, 4).map(({ strategy, result }) => (
-                        <div key={strategy} className="p-3 rounded-lg bg-surface border border-white/5">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-[9px] font-mono text-white/60">{strategy}</span>
-                            <div className="flex gap-2">
-                              {result.modes.map(m => (
-                                <span key={m} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background:`${MODE_PROFILES[m].color}22`, color:MODE_PROFILES[m].color, border:`1px solid ${MODE_PROFILES[m].color}44` }}>{MODE_PROFILES[m].label}</span>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex gap-4 text-[9px]">
-                            <span className="text-white/50">${result.totalCostUSD.toLocaleString()}</span>
-                            <span className="text-white/50">{(result.totalDurationHr/24).toFixed(1)}d</span>
-                            <span className="text-white/50">{result.totalCo2Kg.toLocaleString()}kg CO₂</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {/* Disruption warning */}
-                {selectedRoute?.disrupted && (
-                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex gap-3">
-                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-red-300 font-medium">Active Disruption</p>
-                      <p className="text-[10px] text-red-400/60 mt-1">Route passes disrupted segments. Alternate strategies recommended.</p>
-                    </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                )}
+                );
+              })}
 
-                {/* Empty state */}
-                {!routeResult && (
-                  <div className="flex flex-col gap-3">
-                    <div className="p-4 rounded-xl bg-surface border border-white/5 flex gap-3">
-                      <CloudLightning className="w-4 h-4 text-red-400 shrink-0" />
-                      <div><p className="text-xs text-white/80 font-medium">Houthi Activity</p><p className="text-[10px] text-white/30 mt-1 uppercase tracking-wider">Red Sea lanes degraded</p></div>
-                    </div>
-                    <div className="p-4 rounded-xl bg-surface border border-white/5 flex gap-3">
-                      <Globe className="w-4 h-4 text-white/40 shrink-0" />
-                      <div><p className="text-xs text-white/80 font-medium">Click any route on the map</p><p className="text-[10px] text-white/30 mt-1 uppercase tracking-wider">to load multi-modal analytics</p></div>
-                    </div>
+              {/* Total summary */}
+              {selectedJourney.legs.every(l => l.from && l.to) && (
+                <div style={{ marginTop:8, padding:"14px 16px", background:"rgba(255,255,255,0.02)", borderRadius:12, border:"1px solid rgba(255,255,255,0.06)" }}>
+                  <div style={{ fontSize:9, color:"#ffffff33", textTransform:"uppercase", letterSpacing:2, marginBottom:10 }}>Journey Summary</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    {(() => {
+                      const totalKm = selectedJourney.legs.reduce((sum, l) => {
+                        if (!l.from || !l.to) return sum;
+                        return sum + dist([l.from.lat, l.from.lng], [l.to.lat, l.to.lng]);
+                      }, 0);
+                      const totalHrs = selectedJourney.legs.reduce((sum, l) => {
+                        if (!l.from || !l.to) return sum;
+                        const d = dist([l.from.lat, l.from.lng], [l.to.lat, l.to.lng]);
+                        return sum + d / (MODE_META[l.mode]?.speed ?? 60);
+                      }, 0);
+                      return [
+                        { label:"Total Distance", val:`${totalKm.toLocaleString()} km` },
+                        { label:"Total Duration", val: totalHrs > 24 ? `${(totalHrs/24).toFixed(1)} days` : `${totalHrs.toFixed(1)} hrs` },
+                      ].map(item => (
+                        <div key={item.label} style={{ background:"rgba(0,0,0,0.3)", borderRadius:8, padding:"10px 12px" }}>
+                          <div style={{ fontSize:7, color:"#ffffff33", textTransform:"uppercase", letterSpacing:1, marginBottom:5 }}>{item.label}</div>
+                          <div style={{ fontSize:14, color:"#fff", fontFamily:"monospace", fontWeight:600 }}>{item.val}</div>
+                        </div>
+                      ));
+                    })()}
                   </div>
-                )}
-              </div>
-            </motion.aside>
-
-            {/* Right Panel: Advisor */}
-            <motion.aside
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              className="fixed right-0 top-20 w-[400px] bg-surface-dim/95 backdrop-blur-2xl border-l border-t border-white/5 z-[9999] p-6 flex flex-col gap-6 h-full"
-            >
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-[10px] uppercase tracking-widest text-white/40 mb-2 block">
-                    <TextScramble text="Command Suite" />
-                  </span>
-                  <h2 className="text-3xl font-serif text-white">
-                    <TextScramble text="Strategic Advisor" delay={200} />
-                  </h2>
                 </div>
-                <Brain className="w-6 h-6 text-white/20" />
+              )}
+              {/* ── Simulation Panel ───────────────────────────────────── */}
+              <SimulationPanel
+                simDisruptions={simulatedDisruptions}
+                onAdd={handleAddSim}
+                onRemove={handleRemoveSim}
+                onClear={handleClearSim}
+              />
+
+              {/* ── AI Chatbot ─────────────────────────────────────────── */}
+              <div style={{ marginTop: 12 }}>
+                <JourneyChatbot
+                  journey={selectedJourney}
+                  disruptions={disruptions}
+                  simulatedDisruptions={simulatedDisruptions}
+                  analyses={analyses.filter(a => !a.loading).map(a => ({ legId: a.legId, result: a.result }))}
+                  legsMeta={selectedJourney.legs
+                    .filter(l => l.from && l.to)
+                    .map(l => {
+                      const meta = MODE_META[l.mode];
+                      const distKm = l.from && l.to ? dist([l.from.lat, l.from.lng], [l.to.lat, l.to.lng]) : 0;
+                      return {
+                        id: l.id,
+                        fromName: l.from!.name,
+                        toName: l.to!.name,
+                        mode: l.mode,
+                        distKm,
+                        durationHr: meta ? Math.round(distKm / meta.speed * 10) / 10 : 0,
+                      };
+                    })
+                  }
+                />
               </div>
+            </div>
 
-              <div className="flex-1 flex flex-col gap-10 overflow-hidden">
-                <section className="flex flex-col gap-6">
-                  <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold">What-If Simulation</h3>
-                  <div className="flex flex-col gap-8">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
-                        <span>Transit Speed</span>
-                        <span className="text-white">{(transitSpeed / 3).toFixed(1)} Knots</span>
-                      </div>
-                      <input
-                        type="range"
-                        value={transitSpeed}
-                        onChange={(e) => setTransitSpeed(parseInt(e.target.value))}
-                        className="w-full accent-white bg-white/10 h-px appearance-none cursor-pointer"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-4">
-                      <div className="flex justify-between text-[10px] uppercase tracking-widest text-white/40">
-                        <span>Cost Ceiling</span>
-                        <span className="text-white">${(costCeiling / 10).toFixed(1)}M</span>
-                      </div>
-                      <input
-                        type="range"
-                        value={costCeiling}
-                        onChange={(e) => setCostCeiling(parseInt(e.target.value))}
-                        className="w-full accent-white bg-white/10 h-px appearance-none cursor-pointer"
-                      />
-                    </div>
-                    <button className="w-full py-4 rounded-xl border border-white/10 text-[11px] font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all">
-                      Optimize Route
-                    </button>
-                  </div>
-                </section>
-
-                <section className="flex-1 flex flex-col min-h-0 bg-surface/50 border border-white/5 rounded-3xl overflow-hidden">
-                  <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                      <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">Neural Core v6</span>
-                    </div>
-                    <span className="text-[8px] text-white/20 uppercase tracking-[0.3em]">Encrypted</span>
-                  </div>
-
-                  <div className="flex-1 p-6 space-y-6 overflow-y-auto scrollbar-thin">
-                    {messages.map((m, i) => (
-                      <div key={i} className="flex flex-col gap-2 max-w-[85%]">
-                        <span className="text-[9px] text-white/20 uppercase tracking-widest">
-                          {m.role === 'ai' ? 'Neural Core' : 'Commander'}
-                        </span>
-                        <div className={`p-4 text-xs leading-relaxed rounded-2xl ${m.role === 'ai' ? 'bg-white/5 text-white/80 italic' : 'bg-surface-bright text-white'}`}>
-                          {m.text}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="p-6 border-t border-white/5 bg-surface-container-low">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        className="w-full bg-surface-container-lowest border border-white/10 rounded-xl px-4 py-3 text-xs placeholder:text-white/10 focus:border-white focus:outline-none transition-colors"
-                        placeholder="Instruct advisor..."
-                      />
-                      <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 hover:text-white transition-colors text-white/20">
-                        <Send className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </section>
-              </div>
-            </motion.aside>
-          </>
+            {/* Footer actions */}
+            <div style={{ padding:"14px 20px", borderTop:"1px solid rgba(255,255,255,0.06)", display:"flex", gap:8 }}>
+              <button
+                onClick={() => mapRef.current?.focusJourney(selectedJourney)}
+                style={{ flex:1, padding:"10px", borderRadius:8, border:"1px solid rgba(255,255,255,0.1)",
+                  background:"rgba(255,255,255,0.04)", color:"#fff", cursor:"pointer", fontSize:11,
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+                <Layers style={{ width:12, height:12 }} />
+                Focus on Map
+              </button>
+              <button
+                onClick={() => handleRemoveJourney(selectedJourney.id)}
+                style={{ padding:"10px 14px", borderRadius:8, border:"1px solid rgba(255,68,68,0.2)",
+                  background:"rgba(255,68,68,0.06)", color:"#ff6666", cursor:"pointer", fontSize:11,
+                  display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
+                <Trash2 style={{ width:12, height:12 }} />
+                Remove
+              </button>
+            </div>
+          </motion.aside>
         )}
       </AnimatePresence>
-
-      <footer className="fixed bottom-0 left-20 right-0 h-12 px-10 border-t border-white/5 flex items-center justify-between text-[9px] uppercase tracking-[0.2em] text-white/20 z-[70] bg-background">
-        <div className="flex gap-6">
-          <span>Obsidian v4.2.0</span>
-          <div className="flex items-center gap-1.5">
-            <div className="w-1 h-1 rounded-full bg-emerald-500"></div>
-            <span>Nodes Sync: Active</span>
-          </div>
-        </div>
-        <div className="flex gap-6">
-          <span>Security Protocol 7</span>
-          <span className="text-white/40">© 2026 Obsidian Logistix</span>
-        </div>
-      </footer>
     </div>
   );
 }
+
+// ── Shared control button style ───────────────────────────────────────────────
+const ctrlBtnStyle: React.CSSProperties = {
+  width:40, height:40, display:"flex", alignItems:"center", justifyContent:"center",
+  background:"rgba(5,5,8,0.92)", border:"1px solid rgba(255,255,255,0.1)",
+  borderRadius:8, cursor:"pointer", color:"#fff", transition:"all 0.15s",
+};
