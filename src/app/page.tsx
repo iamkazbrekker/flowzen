@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Menu, Search, Bell, Settings, Plus, Minus, Globe,
-  X, Route, Trash2, ChevronRight, MapPin, Layers,
+  Search, Bell, Settings, Plus, Minus, Globe,
+  X, Route, Trash2, ChevronRight, Layers, ShieldAlert,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { MapHandle } from "./components/Map";
 import JourneyBuilder, { type Journey, type JourneyLeg } from "./components/JourneyBuilder";
+import { useDisruptionAgent } from "../hooks/useDisruptionAgent";
+import DisruptionAlertBanner from "./components/DisruptionAlertBanner";
 
 // Leaflet must load client-side only
 const Map = dynamic(() => import("./components/Map"), { ssr: false });
@@ -47,24 +49,47 @@ export default function App() {
   const [selectedLeg, setSelectedLeg] = useState<JourneyLeg | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
 
-  const handleAddJourney = (journey: Journey) => {
-    setJourneys(prev => [...prev, journey]);
+  // ── Disruption Agent ──────────────────────────────────────────────────────
+  const {
+    disruptions,
+    analyses,
+    loading: agentLoading,
+    lastFetched,
+    criticalAlerts,
+    getLegAnalysis,
+  } = useDisruptionAgent(journeys);
+
+  const refreshAgent = useCallback(() => {
+    // Force re-trigger by bumping journeys ref — agent hook reacts to journeys
+    setJourneys(prev => [...prev]);
+  }, []);
+
+  const handleAddJourney = useCallback((journey: Journey) => {
+    setJourneys(prev => {
+      const exists = prev.find(j => j.id === journey.id);
+      if (exists) return prev.map(j => j.id === journey.id ? journey : j);
+      return [...prev, journey];
+    });
     setSelectedJourney(journey);
     setShowSidebar(true);
-    // Auto-focus to the journey
+    // Don't setShowBuilder(true) here — the builder closes itself via onClose()
     setTimeout(() => mapRef.current?.focusJourney(journey), 400);
-  };
+  }, []);
 
-  const handleRemoveJourney = (id: string) => {
+  const handleRemoveJourney = useCallback((id: string) => {
     setJourneys(prev => prev.filter(j => j.id !== id));
-    if (selectedJourney?.id === id) { setSelectedJourney(null); setShowSidebar(false); }
-  };
+    setSelectedJourney(prev => {
+      if (prev?.id === id) { setShowSidebar(false); setShowBuilder(false); return null; }
+      return prev;
+    });
+  }, []);
 
-  const handleLegClick = (journey: Journey, leg: JourneyLeg) => {
+  const handleLegClick = useCallback((journey: Journey, leg: JourneyLeg) => {
     setSelectedJourney(journey);
     setSelectedLeg(leg);
     setShowSidebar(true);
-  };
+    setShowBuilder(true);
+  }, []);
 
   const MODE_META: Record<string, { emoji: string; label: string; color: string; unit: string; speed: number }> = {
     sea:  { emoji:"⚓", label:"Maritime",  color:"#60a5fa", unit:"knots", speed:15 },
@@ -83,6 +108,15 @@ export default function App() {
 
   return (
     <div style={{ width:"100vw", height:"100vh", background:"#050508", overflow:"hidden", position:"relative", fontFamily:"'Inter', sans-serif" }}>
+
+      {/* ── DISRUPTION BANNER ───────────────────────────────────────────────── */}
+      <DisruptionAlertBanner
+        criticalAlerts={criticalAlerts}
+        loading={agentLoading}
+        lastFetched={lastFetched}
+        disruptionCount={disruptions.length}
+        onRefresh={refreshAgent}
+      />
 
       {/* ── TOP BAR ──────────────────────────────────────────────────────────── */}
       <header style={{
@@ -110,7 +144,12 @@ export default function App() {
         <div style={{ display:"flex", gap:6, alignItems:"center", overflow:"hidden" }}>
           {journeys.map(j => (
             <button key={j.id}
-              onClick={() => { setSelectedJourney(j); setShowSidebar(true); mapRef.current?.focusJourney(j); }}
+              onClick={() => { 
+                setSelectedJourney(j); 
+                setShowSidebar(true); 
+                setShowBuilder(true);
+                mapRef.current?.focusJourney(j); 
+              }}
               style={{
                 display:"flex", alignItems:"center", gap:6, padding:"4px 10px 4px 6px",
                 background: selectedJourney?.id === j.id ? "rgba(96,165,250,0.15)" : "rgba(255,255,255,0.04)",
@@ -167,7 +206,7 @@ export default function App() {
           }}>
             {/* New Journey Button */}
             <button
-              onClick={() => setShowBuilder(true)}
+              onClick={() => { setSelectedJourney(null); setShowSidebar(false); setShowBuilder(true); }}
               style={{
                 display:"flex", alignItems:"center", gap:10, padding:"12px 18px",
                 background:"linear-gradient(135deg, #60a5fa, #818cf8)",
@@ -215,6 +254,7 @@ export default function App() {
           <JourneyBuilder
             onClose={() => setShowBuilder(false)}
             onAdd={handleAddJourney}
+            initialJourney={selectedJourney}
           />
         )}
       </AnimatePresence>
@@ -223,24 +263,19 @@ export default function App() {
       <AnimatePresence>
         {showSidebar && selectedJourney && (
           <motion.aside
-            initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+            initial={{ x: "-100%" }} animate={{ x: 0 }} exit={{ x: "-100%" }}
             transition={{ type:"spring", stiffness:300, damping:30 }}
             style={{
-              position:"fixed", right:0, top:56, bottom:0, width:400,
-              background:"rgba(6,6,16,0.97)", borderLeft:"1px solid rgba(255,255,255,0.07)",
+              position:"fixed", left:0, top:56, bottom:0, width:400,
+              background:"rgba(6,6,16,0.97)", borderRight:"1px solid rgba(255,255,255,0.07)",
               backdropFilter:"blur(20px)", zIndex:400,
               display:"flex", flexDirection:"column",
             }}
           >
-            {/* Header */}
             <div style={{ padding:"16px 20px", borderBottom:"1px solid rgba(255,255,255,0.06)", display:"flex", alignItems:"center", gap:12 }}>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:8, letterSpacing:3, color:"#ffffff33", textTransform:"uppercase", marginBottom:3 }}>Route Intelligence</div>
                 <div style={{ fontSize:16, fontWeight:600, color:"#fff" }}>{selectedJourney.name}</div>
-                <div style={{ fontSize:9, color:"#ffffff44", marginTop:2 }}>
-                  {selectedJourney.legs.length} leg{selectedJourney.legs.length !== 1 ? "s" : ""} •{" "}
-                  {[...new Set(selectedJourney.legs.map(l => MODE_META[l.mode]?.label))].join(" + ")}
-                </div>
               </div>
               <button onClick={() => { setShowSidebar(false); setSelectedLeg(null); }}
                 style={{ width:32, height:32, borderRadius:"50%", background:"rgba(255,255,255,0.05)",
@@ -250,16 +285,19 @@ export default function App() {
               </button>
             </div>
 
-            {/* Legs */}
             <div style={{ flex:1, overflowY:"auto", padding:"16px 20px" }}>
               {selectedJourney.legs.map((leg, idx) => {
                 const meta = MODE_META[leg.mode];
                 const color = leg.color ?? "#60a5fa";
                 const isSelected = selectedLeg?.id === leg.id;
-                const distKm = leg.from && leg.to
-                  ? dist([leg.from.lat, leg.from.lng], [leg.to.lat, leg.to.lng])
-                  : 0;
+                const distKm = leg.from && leg.to ? dist([leg.from.lat, leg.from.lng], [leg.to.lat, leg.to.lng]) : 0;
                 const durationHr = meta ? Math.round(distKm / meta.speed * 10) / 10 : 0;
+                
+                const legAnalysis = getLegAnalysis(leg.id);
+                const sevColors: Record<string, string> = {
+                  critical: "#f87171", high: "#fb923c", medium: "#fbbf24", low: "#818cf8", none: "#4ade80"
+                };
+                const alertColor = legAnalysis?.result?.severity ? sevColors[legAnalysis.result.severity] : undefined;
 
                 return (
                   <div key={leg.id}
@@ -273,8 +311,23 @@ export default function App() {
                     <div style={{ display:"flex", alignItems:"center", padding:"10px 12px", gap:10 }}>
                       <div style={{ width:3, height:36, background:color, borderRadius:2, flexShrink:0 }} />
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:9, color, textTransform:"uppercase", letterSpacing:1.5, marginBottom:3 }}>
+                        <div style={{ fontSize:9, color: legAnalysis?.result?.affected ? alertColor : color, textTransform:"uppercase", letterSpacing:1.5, marginBottom:3, display:"flex", alignItems:"center", gap:6 }}>
                           {meta.emoji} {meta.label} · Leg {idx+1}
+                          {legAnalysis?.loading && (
+                            <span style={{ fontSize:7, color:"#ffffff33", letterSpacing:1 }}>SCANNING…</span>
+                          )}
+                          {legAnalysis?.result?.affected && !legAnalysis.loading && (
+                            <span style={{ fontSize:7, padding:"1px 5px", borderRadius:8,
+                              background: `${alertColor}22`, border:`1px solid ${alertColor}44`,
+                              color: alertColor, letterSpacing:1 }}>
+                              ⚠ {legAnalysis.result.severity?.toUpperCase()}
+                            </span>
+                          )}
+                          {legAnalysis?.result?.rerouted && (
+                            <span style={{ fontSize:7, padding:"1px 5px", borderRadius:8,
+                              background:"rgba(96,165,250,0.15)", border:"1px solid rgba(96,165,250,0.3)",
+                              color:"#60a5fa", letterSpacing:1 }}>↪ REROUTED</span>
+                          )}
                         </div>
                         <div style={{ fontSize:11, color:"#fff", fontFamily:"monospace", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
                           {leg.from?.name ?? "—"} → {leg.to?.name ?? "—"}

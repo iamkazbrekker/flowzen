@@ -19,6 +19,7 @@ export interface JourneyLocation {
 }
 
 export interface JourneyLeg {
+  color: string;
   id: string;
   from: JourneyLocation | null;
   to: JourneyLocation | null;
@@ -44,10 +45,10 @@ const LEG_COLORS = [
 ];
 
 const MODE_CONFIG: Record<JourneyMode, { label: string; icon: React.ElementType; hint: string }> = {
-  sea:  { label: "Sea",  icon: Ship,  hint: "Search ports" },
+  sea: { label: "Sea", icon: Ship, hint: "Search ports" },
   rail: { label: "Rail", icon: Train, hint: "Search cities/stations" },
   road: { label: "Road", icon: Truck, hint: "Search cities" },
-  air:  { label: "Air",  icon: Plane, hint: "Search airports" },
+  air: { label: "Air", icon: Plane, hint: "Search airports" },
 };
 
 // ─── Location Search Input ────────────────────────────────────────────────────
@@ -108,8 +109,8 @@ function LocationSearch({
         {loading
           ? <Loader2 style={{ width: 12, height: 12, color: "#ffffff44", flexShrink: 0, animation: "spin 1s linear infinite" }} />
           : <span style={{ fontSize: 10, color: "#ffffff33", flexShrink: 0 }}>
-              {mode === "sea" ? "⚓" : mode === "air" ? "✈" : mode === "rail" ? "🚂" : "🚛"}
-            </span>
+            {mode === "sea" ? "⚓" : mode === "air" ? "✈" : mode === "rail" ? "🚂" : "🚛"}
+          </span>
         }
         <input
           value={query}
@@ -127,7 +128,7 @@ function LocationSearch({
           placeholder={placeholder}
           style={{
             flex: 1, background: "transparent", border: "none", outline: "none",
-            color: value ? "#00ff88" : "#fff", 
+            color: value ? "#00ff88" : "#fff",
             fontSize: 12, fontFamily: "monospace",
             textShadow: value ? "0 0 8px rgba(0,255,136,0.4)" : "none"
           }}
@@ -190,21 +191,31 @@ function LocationSearch({
 }
 
 // ─── Journey Builder Panel ────────────────────────────────────────────────────
-interface JourneyBuilderProps {
-  onClose: () => void;
-  onAdd: (journey: Journey) => void;
-}
-
 let legCounter = 0;
 
-export default function JourneyBuilder({ onClose, onAdd }: JourneyBuilderProps) {
-  const [journeyName, setJourneyName] = useState("New Journey");
-  const [legs, setLegs] = useState<JourneyLeg[]>([
-    { id: `leg-${++legCounter}`, from: null, to: null, mode: "sea" },
+export interface JourneyBuilderProps {
+  onClose: () => void;
+  onAdd: (j: Journey) => void;
+  initialJourney?: Journey | null;
+}
+
+export default function JourneyBuilder({ onClose, onAdd, initialJourney }: JourneyBuilderProps) {
+  const [journeyName, setJourneyName] = useState(initialJourney?.name ?? "New Journey");
+  const [legs, setLegs] = useState<JourneyLeg[]>(initialJourney?.legs ?? [
+    {
+      id: `leg-${++legCounter}`, from: null, to: null, mode: "sea",
+      color: ""
+    },
   ]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    setJourneyName(initialJourney?.name ?? "New Journey");
+    setLegs(initialJourney?.legs ?? [
+      { id: `leg-${++legCounter}`, from: null, to: null, mode: "sea", color: "" },
+    ]);
+  }, [initialJourney]);
   const addLeg = () => {
     const last = legs[legs.length - 1];
     setLegs(prev => [...prev, {
@@ -212,6 +223,7 @@ export default function JourneyBuilder({ onClose, onAdd }: JourneyBuilderProps) 
       from: last?.to ?? null, // auto-chain: from = previous leg's to
       to: null,
       mode: "road",
+      color: "#f59e0b", // amber
     }]);
   };
 
@@ -227,9 +239,9 @@ export default function JourneyBuilder({ onClose, onAdd }: JourneyBuilderProps) 
     setError(null);
     setSubmitting(true);
     const journey: Journey = {
-      id: `journey-${Date.now()}`,
+      id: initialJourney?.id ?? `journey-${Date.now()}`,
       name: journeyName || "Unnamed Journey",
-      legs: legs.map((l, i) => ({ ...l, color: LEG_COLORS[i % LEG_COLORS.length] })) as JourneyLeg[],
+      legs: legs.map((l, i) => ({ ...l, color: l.color || LEG_COLORS[i % LEG_COLORS.length] })) as JourneyLeg[],
     };
     onAdd(journey);
     setSubmitting(false);
@@ -241,7 +253,7 @@ export default function JourneyBuilder({ onClose, onAdd }: JourneyBuilderProps) 
       initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       style={{
-        position: "fixed", right: 0, top: 0, bottom: 0, width: 420, zIndex: 10000,
+        position: "fixed", right: 0, top: 56, bottom: 0, width: 420, zIndex: 10000,
         background: "rgba(6,6,16,0.97)", borderLeft: "1px solid rgba(255,255,255,0.07)",
         backdropFilter: "blur(20px)", display: "flex", flexDirection: "column",
         fontFamily: "'Inter', monospace",
