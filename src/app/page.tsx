@@ -15,11 +15,18 @@ import {
   Minus,
   Globe,
   Layers,
-  Target
+  Target,
+  AlertTriangle,
+  TrendingUp,
+  Clock,
+  DollarSign,
+  Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import dynamic from 'next/dynamic';
 import TextScramble from './components/TextScramble';
+import type { DisplayRoute, RouteResult } from './data/routing';
+import { MODE_PROFILES, compareStrategies } from './data/routing';
 
 const Map = dynamic(() => import('./components/Map'), { ssr: false });
 
@@ -33,13 +40,21 @@ interface Message {
 
 export default function App() {
   const [showPanels, setShowPanels] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState<DisplayRoute | null>(null);
+  const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [transitSpeed, setTransitSpeed] = useState(70);
   const [costCeiling, setCostCeiling] = useState(40);
   const [messages] = useState<Message[]>([
     { role: 'ai', text: "Analyzing Suez congestion. I recommend diverting Tier 1 cargo via Cape Route. ETA penalty: +9 days. OpEx increase: +14%. Shall I formalize the reroute?" }
   ]);
 
-  const togglePanels = () => setShowPanels(!showPanels);
+  const handleRouteClick = (route: DisplayRoute, result: RouteResult) => {
+    setSelectedRoute(route);
+    setRouteResult(result);
+    setShowPanels(true);
+  };
+
+  const togglePanels = () => setShowPanels(p => !p);
 
   return (
     <div className="h-screen w-full flex flex-row bg-background selection:bg-primary selection:text-background font-sans overflow-hidden">
@@ -89,7 +104,7 @@ export default function App() {
           <div className="scanline" />
 
           <div className="absolute inset-0">
-            <Map onRouteClick={() => setShowPanels(true)} />
+            <Map onRouteClick={handleRouteClick} />
             <div className="absolute inset-0 map-gradient-overlay pointer-events-none" />
           </div>
 
@@ -133,15 +148,15 @@ export default function App() {
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
-              className="fixed left-0 top-20 bottom-12 w-[400px] bg-surface-dim/95 backdrop-blur-2xl border-r border-t border-white/5 z-[9999] p-6 flex flex-col gap-6 h-full"
+              className="fixed left-0 top-20 bottom-12 w-[400px] bg-surface-dim/95 backdrop-blur-2xl border-r border-t border-white/5 z-[9999] p-6 flex flex-col gap-6"
             >
               <div className="flex justify-between items-start">
                 <div>
                   <span className="text-[10px] uppercase tracking-widest text-white/40 mb-2 block">
-                    <TextScramble text="Network Intelligence" />
+                    <TextScramble text="Route Intelligence" />
                   </span>
-                  <h2 className="text-3xl font-serif text-white">
-                    <TextScramble text="SHA-RTM Status" delay={200} />
+                  <h2 className="text-xl font-serif text-white leading-tight">
+                    <TextScramble text={selectedRoute?.label ?? "Select a Route"} delay={200} />
                   </h2>
                 </div>
                 <button onClick={() => setShowPanels(false)} className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors">
@@ -149,63 +164,162 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-10 overflow-y-auto pr-4 scrollbar-thin">
-                <section className="grid grid-cols-2 gap-4">
-                  <div className="p-6 rounded-2xl bg-surface border border-white/5">
-                    <p className="text-[10px] uppercase tracking-widest text-white/40 mb-4">Throughput</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-serif">14.2k</span>
-                      <span className="text-[9px] text-white/20 uppercase tracking-tighter">TEU/D</span>
-                    </div>
-                  </div>
-                  <div className="p-6 rounded-2xl bg-surface border border-white/5">
-                    <p className="text-[10px] uppercase tracking-widest text-white/40 mb-4">Efficiency</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-serif text-emerald-400">94%</span>
-                    </div>
-                  </div>
-                </section>
+              <div className="flex flex-col gap-4 overflow-y-auto pr-2 scrollbar-thin">
 
-                <section>
-                  <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-6">Live Anomalies</h3>
-                  <div className="flex flex-col gap-4">
-                    <div className="p-6 rounded-2xl bg-surface border border-white/5 flex gap-4">
-                      <CloudLightning className="w-6 h-6 text-error shrink-0" />
-                      <div>
-                        <p className="text-xs text-white/80 font-medium">Severe Weather Pattern</p>
-                        <p className="text-[10px] text-white/30 mt-1 uppercase tracking-wider">Suez approach obstructed</p>
-                      </div>
+                {/* Hop path */}
+                {routeResult && (
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-3">Computed Path</h3>
+                    <div className="flex flex-wrap gap-1">
+                      {routeResult.path.map((p, i) => (
+                        <span key={`${p}-${i}`} className="flex items-center gap-1">
+                          <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono text-white/80">{p}</span>
+                          {i < routeResult.path.length - 1 && <span className="text-white/20 text-[9px]">→</span>}
+                        </span>
+                      ))}
                     </div>
-                    <div className="p-6 rounded-2xl bg-surface border border-white/5 flex gap-4">
-                      <Anchor className="w-6 h-6 text-white/60 shrink-0" />
-                      <div>
-                        <p className="text-xs text-white/80 font-medium">Port Congestion Warning</p>
-                        <p className="text-[10px] text-white/30 mt-1 uppercase tracking-wider">Terminal 4 dwell time increased</p>
-                      </div>
-                    </div>
-                  </div>
-                </section>
+                  </section>
+                )}
 
-                <section>
-                  <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-6">Top Resource Units</h3>
-                  <div className="flex flex-col gap-4">
-                    {[{ n: "MS-VALENCIA", v: 82 }, { n: "OC-PRIDE", v: 45 }].map(u => (
-                      <div key={u.n} className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-mono text-white/80">{u.n}</span>
-                          <span className="text-[10px] text-white/40">{u.v}%</span>
+                {/* Segment breakdown */}
+                {routeResult && routeResult.segments.length > 0 && (
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-3">Segment Breakdown</h3>
+                    <div className="flex flex-col gap-2">
+                      {routeResult.segments.map((seg, i) => {
+                        const p = MODE_PROFILES[seg.mode];
+                        return (
+                          <div key={i} className="p-3 rounded-lg bg-surface border border-white/5 flex gap-3 items-start">
+                            <div style={{ width:3, borderRadius:2, background: seg.disrupted ? '#ff4444' : p.color, flexShrink:0, alignSelf:'stretch' }} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] font-mono" style={{ color: seg.disrupted ? '#ff4444' : p.color }}>{p.label.toUpperCase()}{seg.disrupted ? ' ⚠' : ''}</span>
+                                <span className="text-[9px] font-mono text-white/40">{seg.from} → {seg.to}</span>
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                  <div className="text-[8px] text-white/30 uppercase">Dist</div>
+                                  <div className="text-[10px] font-mono text-white/70">{seg.distanceKm.toLocaleString()}km</div>
+                                </div>
+                                <div>
+                                  <div className="text-[8px] text-white/30 uppercase">Time</div>
+                                  <div className="text-[10px] font-mono text-white/70">{seg.durationHr > 24 ? `${(seg.durationHr/24).toFixed(1)}d` : `${seg.durationHr}h`}</div>
+                                </div>
+                                <div>
+                                  <div className="text-[8px] text-white/30 uppercase">CO₂</div>
+                                  <div className="text-[10px] font-mono text-white/70">{seg.co2Kg}kg</div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {/* Summary metrics */}
+                {routeResult && (
+                  <section className="grid grid-cols-2 gap-2">
+                    <div className="p-3 rounded-xl bg-surface border border-white/5">
+                      <div className="flex items-center gap-1.5 mb-1"><DollarSign className="w-3 h-3 text-white/30" /><p className="text-[8px] uppercase tracking-widest text-white/30">Total Cost</p></div>
+                      <div className="text-lg font-serif">${routeResult.totalCostUSD.toLocaleString()}</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-surface border border-white/5">
+                      <div className="flex items-center gap-1.5 mb-1"><Clock className="w-3 h-3 text-white/30" /><p className="text-[8px] uppercase tracking-widest text-white/30">Duration</p></div>
+                      <div className="text-lg font-serif">{(routeResult.totalDurationHr / 24).toFixed(1)}d</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-surface border border-white/5">
+                      <div className="flex items-center gap-1.5 mb-1"><Activity className="w-3 h-3 text-white/30" /><p className="text-[8px] uppercase tracking-widest text-white/30">Risk</p></div>
+                      <div className={`text-lg font-serif ${routeResult.riskScore > 0.2 ? 'text-red-400' : 'text-emerald-400'}`}>{(routeResult.riskScore * 100).toFixed(0)}%</div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-surface border border-white/5">
+                      <div className="flex items-center gap-1.5 mb-1"><TrendingUp className="w-3 h-3 text-white/30" /><p className="text-[8px] uppercase tracking-widest text-white/30">CO₂</p></div>
+                      <div className="text-lg font-serif">{routeResult.totalCo2Kg.toLocaleString()}kg</div>
+                    </div>
+                  </section>
+                )}
+
+                {/* Monte Carlo */}
+                {routeResult && (
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-3">Monte Carlo — {routeResult.monteCarlo.simulations.toLocaleString()} runs</h3>
+                    <div className="p-3 rounded-xl bg-surface border border-white/5 flex flex-col gap-2">
+                      {[
+                        { label: "P50 Cost",   val: `$${routeResult.monteCarlo.p50Cost.toLocaleString()}`, danger: false },
+                        { label: "P95 Cost",   val: `$${routeResult.monteCarlo.p95Cost.toLocaleString()}`, danger: true },
+                        { label: "P50 Duration", val: `${(routeResult.monteCarlo.p50Duration/24).toFixed(1)}d`, danger: false },
+                        { label: "P95 Duration", val: `${(routeResult.monteCarlo.p95Duration/24).toFixed(1)}d`, danger: true },
+                      ].map(row => (
+                        <div key={row.label} className="flex justify-between text-[10px]">
+                          <span className="text-white/40 uppercase tracking-wider">{row.label}</span>
+                          <span className={`font-mono ${row.danger ? 'text-red-400' : 'text-white'}`}>{row.val}</span>
+                        </div>
+                      ))}
+                      <div className="mt-1">
+                        <div className="flex justify-between text-[10px] mb-1">
+                          <span className="text-white/40 uppercase tracking-wider">Delay Probability</span>
+                          <span className={`font-mono ${routeResult.monteCarlo.delayProbability > 30 ? 'text-red-400' : 'text-emerald-400'}`}>{routeResult.monteCarlo.delayProbability}%</span>
                         </div>
                         <div className="w-full h-0.5 bg-white/5 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${u.v}%` }}
-                            className="h-full bg-white/40"
-                          />
+                          <motion.div initial={{ width:0 }} animate={{ width:`${routeResult.monteCarlo.delayProbability}%` }} transition={{ duration:1 }}
+                            className={`h-full ${routeResult.monteCarlo.delayProbability > 30 ? 'bg-red-500' : 'bg-emerald-500'}`} />
                         </div>
                       </div>
-                    ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Strategy compare */}
+                {selectedRoute && routeResult && (
+                  <section>
+                    <h3 className="text-[10px] uppercase tracking-[0.25em] text-white/30 font-bold mb-3">Strategy Comparison</h3>
+                    <div className="flex flex-col gap-2">
+                      {compareStrategies(selectedRoute.from, selectedRoute.to).slice(0, 4).map(({ strategy, result }) => (
+                        <div key={strategy} className="p-3 rounded-lg bg-surface border border-white/5">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-[9px] font-mono text-white/60">{strategy}</span>
+                            <div className="flex gap-2">
+                              {result.modes.map(m => (
+                                <span key={m} className="text-[8px] px-1.5 py-0.5 rounded" style={{ background:`${MODE_PROFILES[m].color}22`, color:MODE_PROFILES[m].color, border:`1px solid ${MODE_PROFILES[m].color}44` }}>{MODE_PROFILES[m].label}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex gap-4 text-[9px]">
+                            <span className="text-white/50">${result.totalCostUSD.toLocaleString()}</span>
+                            <span className="text-white/50">{(result.totalDurationHr/24).toFixed(1)}d</span>
+                            <span className="text-white/50">{result.totalCo2Kg.toLocaleString()}kg CO₂</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* Disruption warning */}
+                {selectedRoute?.disrupted && (
+                  <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 flex gap-3">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs text-red-300 font-medium">Active Disruption</p>
+                      <p className="text-[10px] text-red-400/60 mt-1">Route passes disrupted segments. Alternate strategies recommended.</p>
+                    </div>
                   </div>
-                </section>
+                )}
+
+                {/* Empty state */}
+                {!routeResult && (
+                  <div className="flex flex-col gap-3">
+                    <div className="p-4 rounded-xl bg-surface border border-white/5 flex gap-3">
+                      <CloudLightning className="w-4 h-4 text-red-400 shrink-0" />
+                      <div><p className="text-xs text-white/80 font-medium">Houthi Activity</p><p className="text-[10px] text-white/30 mt-1 uppercase tracking-wider">Red Sea lanes degraded</p></div>
+                    </div>
+                    <div className="p-4 rounded-xl bg-surface border border-white/5 flex gap-3">
+                      <Globe className="w-4 h-4 text-white/40 shrink-0" />
+                      <div><p className="text-xs text-white/80 font-medium">Click any route on the map</p><p className="text-[10px] text-white/30 mt-1 uppercase tracking-wider">to load multi-modal analytics</p></div>
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.aside>
 

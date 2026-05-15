@@ -248,30 +248,142 @@ export const chatHistory: ChatMessage[] = [
   },
 ];
 
+export const hubs = {
+  SHANGHAI: { id: "SHA", name: "Shanghai", lat: 31.2, lng: 121.5 },
+  ROTTERDAM: { id: "RTM", name: "Rotterdam", lat: 51.9, lng: 4.4 },
+  SINGAPORE: { id: "SIN", name: "Singapore", lat: 1.3, lng: 103.8 },
+  SUEZ: { id: "SUE", name: "Suez", lat: 30.5, lng: 32.3 },
+  MUNDRA: { id: "MUN", name: "Mundra", lat: 22.8, lng: 69.7 },
+  LOS_ANGELES: { id: "LAX", name: "Los Angeles", lat: 33.7, lng: -118.2 },
+  YOKOHAMA: { id: "YOK", name: "Yokohama", lat: 35.4, lng: 139.6 },
+  CAPE_TOWN: { id: "CPT", name: "Cape Town", lat: -33.9, lng: 18.4 },
+  DELHI: { id: "DEL", name: "Delhi", lat: 28.6, lng: 77.2 },
+  BENGALURU: { id: "BLR", name: "Bengaluru", lat: 13.0, lng: 77.6 },
+  HAMBURG: { id: "HAM", name: "Hamburg", lat: 53.5, lng: 10.0 },
+};
+
+export const connections = [
+  { from: "SHA", to: "SIN", distance: 4500 },
+  { from: "SIN", to: "MUN", distance: 4000 },
+  { from: "MUN", to: "SUE", distance: 3500 },
+  { from: "SUE", to: "RTM", distance: 5000 },
+  { from: "SIN", to: "CPT", distance: 9000 },
+  { from: "CPT", to: "RTM", distance: 10000 },
+  { from: "SHA", to: "YOK", distance: 2000 },
+  { from: "YOK", to: "LAX", distance: 8000 },
+  { from: "DEL", to: "BLR", distance: 2000 },
+  { from: "DEL", to: "MUN", distance: 1000 },
+  { from: "BLR", to: "SIN", distance: 3000 },
+  { from: "RTM", to: "HAM", distance: 400 },
+];
+
 export const corridors = [
   {
     id: "corridor-1",
     name: "Suez Canal Closure",
-    points: [[31.2, 121.5], [22.3, 113.5], [12.0, 52.0], [30.5, 32.3]] as [number, number][],
+    points: [
+      [hubs.SHANGHAI.lat, hubs.SHANGHAI.lng],
+      [hubs.SINGAPORE.lat, hubs.SINGAPORE.lng],
+      [hubs.MUNDRA.lat, hubs.MUNDRA.lng],
+      [hubs.SUEZ.lat, hubs.SUEZ.lng],
+    ] as [number, number][],
     disrupted: true,
   },
   {
     id: "corridor-2",
     name: "Europe-Asia via Suez",
-    points: [[51.9, 4.4], [38.0, 13.0], [30.5, 32.3], [22.3, 60.0], [1.3, 103.8], [31.2, 121.5]] as [number, number][],
+    points: [
+      [hubs.ROTTERDAM.lat, hubs.ROTTERDAM.lng],
+      [hubs.SUEZ.lat, hubs.SUEZ.lng],
+      [hubs.MUNDRA.lat, hubs.MUNDRA.lng],
+      [hubs.SINGAPORE.lat, hubs.SINGAPORE.lng],
+      [hubs.SHANGHAI.lat, hubs.SHANGHAI.lng],
+    ] as [number, number][],
     disrupted: true,
   },
   {
     id: "corridor-3",
     name: "Trans-Pacific",
-    points: [[35.4, 139.6], [30.0, -140.0], [33.7, -118.2]] as [number, number][],
+    points: [
+      [hubs.YOKOHAMA.lat, hubs.YOKOHAMA.lng],
+      [30.0, -140.0],
+      [hubs.LOS_ANGELES.lat, hubs.LOS_ANGELES.lng],
+    ] as [number, number][],
     disrupted: false,
   },
   {
     id: "corridor-4",
     name: "Cape Reroute",
-    points: [[31.2, 121.5], [1.3, 103.8], [-20.0, 60.0], [-34.0, 18.5], [-20.0, -10.0], [51.9, 4.4]] as [number, number][],
+    points: [
+      [hubs.SHANGHAI.lat, hubs.SHANGHAI.lng],
+      [hubs.SINGAPORE.lat, hubs.SINGAPORE.lng],
+      [hubs.CAPE_TOWN.lat, hubs.CAPE_TOWN.lng],
+      [hubs.ROTTERDAM.lat, hubs.ROTTERDAM.lng],
+    ] as [number, number][],
     disrupted: false,
     candidate: true,
   },
+  {
+    id: "corridor-5",
+    name: "India Inland Route",
+    points: [
+      [hubs.DELHI.lat, hubs.DELHI.lng],
+      [hubs.BENGALURU.lat, hubs.BENGALURU.lng],
+    ] as [number, number][],
+    disrupted: false,
+  }
 ];
+
+// Simple Dijkstra Implementation for Routing
+export function findRoute(startId: string, endId: string) {
+  const hubList = Object.values(hubs);
+  const distances: Record<string, number> = {};
+  const previous: Record<string, string | null> = {};
+  const nodes = new Set(hubList.map(h => h.id));
+
+  hubList.forEach(hub => {
+    distances[hub.id] = Infinity;
+    previous[hub.id] = null;
+  });
+
+  distances[startId] = 0;
+
+  while (nodes.size > 0) {
+    let closestNode: string | null = null;
+    nodes.forEach(node => {
+      if (closestNode === null || distances[node] < distances[closestNode]) {
+        closestNode = node;
+      }
+    });
+
+    if (closestNode === null || distances[closestNode] === Infinity) break;
+    if (closestNode === endId) break;
+
+    nodes.delete(closestNode);
+
+    const neighbors = connections.filter(c => c.from === closestNode || c.to === closestNode);
+    neighbors.forEach(connection => {
+      const neighbor = connection.from === closestNode ? connection.to : connection.from;
+      if (!nodes.has(neighbor)) return;
+
+      const alt = distances[closestNode!] + connection.distance;
+      if (alt < distances[neighbor]) {
+        distances[neighbor] = alt;
+        previous[neighbor] = closestNode;
+      }
+    });
+  }
+
+  const path: string[] = [];
+  let u: string | null = endId;
+  while (u !== null) {
+    path.unshift(u);
+    u = previous[u];
+  }
+
+  return path.map(id => {
+    const hub = Object.values(hubs).find(h => h.id === id);
+    return hub ? [hub.lat, hub.lng] as [number, number] : null;
+  }).filter(p => p !== null) as [number, number][];
+}
+
