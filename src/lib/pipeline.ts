@@ -3,6 +3,7 @@
 
 import { ingestNews } from "./ingest";
 import { DisruptionEvent, PipelineResult } from "./types";
+import { supabase } from "./supabaseClient";
 
 /** Deduplicates by event_type + location cluster, keeping highest severity */
 function deduplicateEvents(events: DisruptionEvent[]): DisruptionEvent[] {
@@ -52,6 +53,15 @@ function deduplicateEvents(events: DisruptionEvent[]): DisruptionEvent[] {
 export async function runPipeline(): Promise<PipelineResult> {
   const { events: rawEvents, totalFetched } = await ingestNews();
   const deduplicated = deduplicateEvents(rawEvents);
+
+  if (deduplicated.length > 0) {
+    const { error } = await supabase.from('disruptions').insert(deduplicated);
+    if (error) {
+      console.error('Error inserting into Supabase:', error);
+    } else {
+      console.log(`Successfully stored ${deduplicated.length} disruptions in Supabase.`);
+    }
+  }
 
   return {
     events: deduplicated,

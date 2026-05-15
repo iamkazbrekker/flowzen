@@ -283,7 +283,7 @@ function dijkstra(
   let cur: string | null = endId;
   while (cur !== null) {
     path.unshift(cur);
-    const p = prev[cur];
+    const p: { from: string; lane: Lane } | null = prev[cur];
     if (p) usedLanes.unshift(p.lane);
     cur = p ? p.from : null;
   }
