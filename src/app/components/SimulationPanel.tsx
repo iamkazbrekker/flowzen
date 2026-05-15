@@ -240,7 +240,7 @@ export default function SimulationPanel({ simDisruptions, onAdd, onRemove, onCle
                               <span style={{ fontSize: 8, color: sc.text, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 700 }}>
                                 {d.severity}
                               </span>
-                              <span style={{ fontSize: 8, color: "#ffffff33", padding: "1px 5px", borderRadius: 4, background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.25)", color: "#a78bfa" }}>
+                              <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 4, background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.25)", color: "#a78bfa" }}>
                                 SIMULATED
                               </span>
                             </div>

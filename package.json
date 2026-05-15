@@ -15,6 +15,7 @@
     "@supabase/supabase-js": "^2.105.4",
     "@types/leaflet": "^1.9.21",
     "ai": "^6.0.182",
+    "autoprefixer": "^10.5.0",
     "axios": "^1.16.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.4.2",
@@ -24,8 +25,9 @@
     "lucide-react": "^1.16.0",
     "motion": "^12.38.0",
     "next": "^16.2.6",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "postcss": "^8.5.14",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "twitter-api-v2": "^1.29.0"
   },
   "devDependencies": {
@@ -33,9 +35,9 @@
     "@types/node": "^20.19.41",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "eslint": "^9",
+    "eslint": "^9.39.4",
     "eslint-config-next": "16.2.6",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.3.0",
     "typescript": "^5.9.3"
   }
 }

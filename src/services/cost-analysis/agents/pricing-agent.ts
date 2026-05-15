@@ -27,9 +27,23 @@ export async function pricingAgent(ctx: AgentContext): Promise<AgentContext> {
   const { cargo_weight_kg, cargo_type } = ctx.request;
   const estimates: ModeEstimate[] = [];
 
+  let usdToInr = 83.5; // Fallback rate
+  let apiUsed = "fallback";
+  try {
+    const res = await fetch("https://api.frankfurter.app/latest?from=USD&to=INR");
+    if (res.ok) {
+      const data = await res.json();
+      usdToInr = data.rates.INR;
+      apiUsed = "Frankfurter API (api.frankfurter.app)";
+      ctx.logs.push(`[PricingAgent] Fetched live exchange rate from Frankfurter API: 1 USD = ₹${usdToInr}`);
+    }
+  } catch (err) {
+    ctx.logs.push("[PricingAgent] Failed to fetch live exchange rate, using fallback.");
+  }
+
   for (const mode of available_modes) {
     try {
-      let baseCost: number;
+      let baseCostUsd: number;
       let transitDays: number;
       let co2Kg: number;
       let distanceKm: number;
@@ -38,7 +52,7 @@ export async function pricingAgent(ctx: AgentContext): Promise<AgentContext> {
       switch (mode) {
         case "air": {
           const airEst = estimateAirFreight(source, destination, cargo_weight_kg);
-          baseCost = airEst.total_cost;
+          baseCostUsd = airEst.total_cost;
           transitDays = Math.round((airEst.transit_hours / 24) * 10) / 10;
           distanceKm = airEst.distance_km;
           co2Kg = estimateCO2("air", distanceKm, cargo_weight_kg);
@@ -50,7 +64,7 @@ export async function pricingAgent(ctx: AgentContext): Promise<AgentContext> {
             source, destination, cargo_weight_kg,
             ctx.request.source, ctx.request.destination
           );
-          baseCost = seaEst.total_cost;
+          baseCostUsd = seaEst.total_cost;
           transitDays = seaEst.transit_days;
           distanceKm = seaEst.distance_km;
           co2Kg = estimateCO2("sea", distanceKm, cargo_weight_kg);
@@ -60,7 +74,7 @@ export async function pricingAgent(ctx: AgentContext): Promise<AgentContext> {
         default: {
           // Rail / Road — use generic formulas
           distanceKm = distances[`${mode}_km` as keyof typeof distances] as number ?? distances.straight_line_km;
-          baseCost = estimateCost(mode, distanceKm, cargo_weight_kg, cargo_type);
+          baseCostUsd = estimateCost(mode, distanceKm, cargo_weight_kg, cargo_type);
           transitDays = estimateTransitDays(mode, distanceKm);
           co2Kg = estimateCO2(mode, distanceKm, cargo_weight_kg);
           break;
@@ -68,11 +82,12 @@ export async function pricingAgent(ctx: AgentContext): Promise<AgentContext> {
       }
 
       const rates = RATE_TABLE[mode];
+      const baseCostInr = Math.round(baseCostUsd * usdToInr);
 
       estimates.push({
         mode,
-        base_cost_usd: baseCost,
-        adjusted_cost_usd: baseCost, // will be adjusted by disruption agent
+        base_cost_inr: baseCostInr,
+        adjusted_cost_inr: baseCostInr, // will be adjusted by disruption agent
         transit_days: transitDays,
         adjusted_transit_days: transitDays,
         reliability_score: rates.reliability_base,
@@ -86,7 +101,7 @@ export async function pricingAgent(ctx: AgentContext): Promise<AgentContext> {
       });
 
       ctx.logs.push(
-        `[PricingAgent] ${mode.toUpperCase()}: $${baseCost} | ${transitDays}d | ${distanceKm}km | CO2: ${co2Kg}kg`
+        `[PricingAgent] ${mode.toUpperCase()}: ₹${baseCostInr} | ${transitDays}d | ${distanceKm}km | CO2: ${co2Kg}kg`
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -95,6 +110,10 @@ export async function pricingAgent(ctx: AgentContext): Promise<AgentContext> {
   }
 
   ctx.mode_estimates = estimates;
+  ctx.exchange_rate = {
+    api_used: apiUsed,
+    usd_to_inr: usdToInr
+  };
   ctx.logs.push(`[PricingAgent] Completed ${estimates.length} estimates in ${Date.now() - start}ms`);
 
   return ctx;

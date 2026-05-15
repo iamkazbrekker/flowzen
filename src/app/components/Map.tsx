@@ -317,16 +317,20 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
           <div style={{ marginBottom:7, letterSpacing:2, color:"#ffffff44", textTransform:"uppercase" }}>
             Transport Modes
           </div>
-          {(Object.entries(MODE_PROFILES) as [string, typeof MODE_PROFILES[keyof typeof MODE_PROFILES]][]).map(([mode, p]) => (
-            <div key={mode} style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
-              <div style={{ width:22, height:2,
-                borderRadius:1, borderTop: p.dashArray ? `2px dashed ${p.color}` : undefined,
-                background: p.dashArray ? "transparent" : p.color }} />
-              <span style={{ color:"#ffffffaa" }}>{p.label}</span>
-            </div>
-            <div style={{ fontFamily: "monospace", fontSize: 10, color: "#ffffff33", marginTop: 6 }}>
-              Click "New Journey" to begin
-            </div>
+          {(Object.keys(MODE_STYLE) as JourneyMode[]).map((mode) => {
+            const style = MODE_STYLE[mode];
+            const label = MODE_LABELS[mode];
+            return (
+              <div key={mode} style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
+                <div style={{ width:22, height:2,
+                  borderRadius:1, borderTop: style.dashArray ? `2px dashed #ffffff88` : undefined,
+                  background: style.dashArray ? "transparent" : "#ffffff88" }} />
+                <span style={{ color:"#ffffffaa", fontSize: 11 }}>{label}</span>
+              </div>
+            );
+          })}
+          <div style={{ fontFamily: "monospace", fontSize: 10, color: "#ffffff33", marginTop: 6 }}>
+            Click "New Journey" to begin
           </div>
         </div>
       )}
