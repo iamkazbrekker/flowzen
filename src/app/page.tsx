@@ -29,6 +29,7 @@ import type { DisplayRoute, RouteResult } from './data/routing';
 import { MODE_PROFILES, compareStrategies } from './data/routing';
 
 const Map = dynamic(() => import('./components/Map'), { ssr: false });
+import CargoAnalysis from './components/CargoAnalysis';
 
 // --- Constants & Types ---
 
@@ -42,6 +43,7 @@ export default function App() {
   const [showPanels, setShowPanels] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState<DisplayRoute | null>(null);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
+  const [showCargoAnalysis, setShowCargoAnalysis] = useState(false);
   const [transitSpeed, setTransitSpeed] = useState(70);
   const [costCeiling, setCostCeiling] = useState(40);
   const [messages] = useState<Message[]>([
@@ -89,6 +91,13 @@ export default function App() {
               ))}
             </div>
             <div className="flex gap-4">
+              <button 
+                onClick={() => setShowCargoAnalysis(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600/10 border border-blue-500/20 rounded-xl text-blue-400 text-xs font-bold uppercase tracking-wider hover:bg-blue-600/20 transition-all"
+              >
+                <Brain className="w-4 h-4" />
+                AI Analysis
+              </button>
               <Bell className="w-5 h-5 text-white/40 hover:text-white transition-colors cursor-pointer" />
               <div
                 className="h-8 w-8 rounded-full bg-surface-bright border border-white/5 overflow-hidden cursor-pointer hover:border-white/20 transition-all"
@@ -138,6 +147,33 @@ export default function App() {
           </div>
         </main>
       </section>
+
+      {/* --- CARGO ANALYSIS MODAL --- */}
+      <AnimatePresence>
+        {showCargoAnalysis && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[10000] bg-background/80 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="relative w-full max-w-5xl max-h-[90vh] overflow-y-auto bg-surface-dim border border-white/5 rounded-3xl shadow-2xl custom-scrollbar"
+            >
+              <button 
+                onClick={() => setShowCargoAnalysis(false)}
+                className="absolute top-6 right-6 p-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors z-10"
+              >
+                <X className="w-5 h-5 text-white/60" />
+              </button>
+              <CargoAnalysis />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* --- SLIDE PANELS --- */}
       <AnimatePresence>

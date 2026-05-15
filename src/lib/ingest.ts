@@ -48,8 +48,15 @@ Description: ${a.description ?? ""}
 Content: ${a.content ?? ""}
 `.trim();
 
+    console.log(`\n[Ingest] Analyzing: "${a.title.slice(0, 80)}"`);
     const analyzed = await analyzeDisruption(text);
-    if (analyzed) disruptions.push(analyzed);
+
+    if (analyzed) {
+      console.log(`[Ingest] ✅ Extracted:`, JSON.stringify(analyzed, null, 2));
+      disruptions.push(analyzed);
+    } else {
+      console.log(`[Ingest] ⊘ Filtered out (not relevant or extraction failed)`);
+    }
   }
 
   return { events: disruptions, totalFetched };
