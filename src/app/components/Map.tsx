@@ -5,6 +5,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Journey, JourneyLeg, JourneyMode } from "./JourneyBuilder";
 import { calculateSeaRoute } from "../data/seaRoutes";
+import { getReroutedWaypoints } from "../data/routeWaypoints";
 import type { LegAnalysis } from "../../hooks/useDisruptionAgent";
 
 export interface MapHandle {
@@ -180,6 +181,7 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
         @keyframes spin { to { transform: rotate(360deg); } }
         .fz-leg { cursor: pointer; }
         .fz-disrupted path { animation: fzDash 1s linear infinite !important; }
+        .fz-rerouted path { filter: drop-shadow(0 0 4px currentColor); }
       `;
       document.head.appendChild(s);
     }
@@ -263,41 +265,104 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
           journeyLayerGroup.current!.addLayer(badge);
         }
 
-        // Async: fetch real routing geometry
-        getLegWaypoints(leg).then(pts => {
+        // Async: fetch real routing geometry and optionally rerouted path
+        getLegWaypoints(leg).then(async pts => {
           if (!journeyLayerGroup.current) return;
           journeyLayerGroup.current.removeLayer(placeholder);
 
-          // Main route line
-          const poly = L.polyline(pts, {
-            color: lineColor,
-            weight: lineWeight,
-            opacity: lineOpacity,
-            dashArray,
-            className,
-          });
-          poly.on("mouseover", () => poly.setStyle({ opacity: 1, weight: lineWeight + 1.5 }));
-          poly.on("mouseout", () => poly.setStyle({ opacity: lineOpacity, weight: lineWeight }));
-          poly.on("click", e => {
-            L.DomEvent.stopPropagation(e);
-            onLegClick?.(journey, leg);
-            if (pts.length > 1) {
-              mapInstance.current?.flyToBounds(poly.getBounds(), { padding: [80, 80], maxZoom: 10, duration: 1.2 });
-            }
-          });
-          journeyLayerGroup.current!.addLayer(poly);
+          const altMode = result?.alternativeMode;
 
-          // If rerouted: draw a blue ghost of the original straight-line path
-          if (rerouted) {
-            const altPts: [number, number][] = [[leg.from!.lat, leg.from!.lng], [leg.to!.lat, leg.to!.lng]];
-            const altLine = L.polyline(altPts, {
-              color: "#60a5fa",
-              weight: 1.5,
+          if (rerouted && altMode) {
+            // 1. Grey ghost — original disrupted route
+            const ghost = L.polyline(pts, {
+              color: "#6b7280",
+              weight: 2,
               opacity: 0.35,
-              dashArray: "4, 8",
+              dashArray: "6, 6",
               className: "fz-leg",
             });
-            journeyLayerGroup.current!.addLayer(altLine);
+            journeyLayerGroup.current!.addLayer(ghost);
+
+            // 2. Rich rerouted path via corridor waypoints
+            const from: [number, number] = [leg.from!.lat, leg.from!.lng];
+            const to:   [number, number] = [leg.to!.lat,   leg.to!.lng];
+            const reroutePts = await getReroutedWaypoints(altMode, from, to);
+            if (!journeyLayerGroup.current) return;
+
+            const altColor = altMode === "air" ? "#a78bfa"
+              : altMode === "sea"  ? "#2dd4bf"
+              : altMode === "rail" ? "#fbbf24"
+              : "#34d399"; // road
+
+            const altStyle = MODE_STYLE[altMode as keyof typeof MODE_STYLE] ?? { weight: 2.5, opacity: 0.9 };
+
+            // Outer glow line
+            const glowPoly = L.polyline(reroutePts, {
+              color: altColor, weight: altStyle.weight + 4,
+              opacity: 0.15, dashArray: undefined, className: "fz-leg",
+            });
+            journeyLayerGroup.current!.addLayer(glowPoly);
+
+            // Main rerouted line
+            const reroutePoly = L.polyline(reroutePts, {
+              color: altColor, weight: altStyle.weight + 1,
+              opacity: 0.92,
+              dashArray: altStyle.dashArray,
+              className: "fz-leg fz-rerouted",
+            });
+            reroutePoly.on("mouseover", () => reroutePoly.setStyle({ opacity: 1, weight: altStyle.weight + 3 }));
+            reroutePoly.on("mouseout",  () => reroutePoly.setStyle({ opacity: 0.92, weight: altStyle.weight + 1 }));
+            reroutePoly.on("click", e => {
+              L.DomEvent.stopPropagation(e);
+              onLegClick?.(journey, leg);
+              mapInstance.current?.flyToBounds(reroutePoly.getBounds(), { padding: [80, 80], maxZoom: 8, duration: 1.2 });
+            });
+            journeyLayerGroup.current!.addLayer(reroutePoly);
+
+            // Node dots along the rerouted path (every ~4th point)
+            const step = Math.max(1, Math.floor(reroutePts.length / 12));
+            reroutePts.forEach((pt, i) => {
+              if (i === 0 || i === reroutePts.length - 1 || i % step !== 0) return;
+              const dot = L.circleMarker(pt as L.LatLngExpression, {
+                radius: 2.5, color: altColor, fillColor: altColor,
+                fillOpacity: 0.9, weight: 1, opacity: 0.7,
+              });
+              journeyLayerGroup.current?.addLayer(dot);
+            });
+
+            // "REROUTED →" mode label at midpoint of new route
+            const midPt = reroutePts[Math.floor(reroutePts.length / 2)];
+            if (midPt) {
+              const rerouteLabel = L.marker(midPt as L.LatLngExpression, {
+                icon: L.divIcon({
+                  html: `<div style="background:rgba(0,0,0,0.92);border:1px solid ${altColor}88;
+                    color:${altColor};font-size:7px;font-family:monospace;letter-spacing:1px;
+                    padding:2px 8px;border-radius:10px;white-space:nowrap;pointer-events:none;
+                    box-shadow:0 0 8px ${altColor}55;">
+                    ↪ REROUTED: ${altMode.toUpperCase()}
+                  </div>`,
+                  className: "", iconSize: [0, 0], iconAnchor: [0, 0],
+                }),
+                zIndexOffset: 900,
+              });
+              journeyLayerGroup.current!.addLayer(rerouteLabel);
+            }
+
+          } else {
+            // Normal (non-rerouted) route line
+            const poly = L.polyline(pts, {
+              color: lineColor, weight: lineWeight,
+              opacity: lineOpacity, dashArray, className,
+            });
+            poly.on("mouseover", () => poly.setStyle({ opacity: 1, weight: lineWeight + 1.5 }));
+            poly.on("mouseout",  () => poly.setStyle({ opacity: lineOpacity, weight: lineWeight }));
+            poly.on("click", e => {
+              L.DomEvent.stopPropagation(e);
+              onLegClick?.(journey, leg);
+              if (pts.length > 1)
+                mapInstance.current?.flyToBounds(poly.getBounds(), { padding: [80, 80], maxZoom: 10, duration: 1.2 });
+            });
+            journeyLayerGroup.current!.addLayer(poly);
           }
         });
       });
@@ -313,18 +378,39 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
         <div style={{
           position: "absolute", inset: 0, display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center", pointerEvents: "none",
+          zIndex: 10,
         }}>
-          <div style={{ marginBottom:7, letterSpacing:2, color:"#ffffff44", textTransform:"uppercase" }}>
-            Transport Modes
-          </div>
-          {(Object.entries(MODE_PROFILES) as [string, typeof MODE_PROFILES[keyof typeof MODE_PROFILES]][]).map(([mode, p]) => (
-            <div key={mode} style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
-              <div style={{ width:22, height:2,
-                borderRadius:1, borderTop: p.dashArray ? `2px dashed ${p.color}` : undefined,
-                background: p.dashArray ? "transparent" : p.color }} />
-              <span style={{ color:"#ffffffaa" }}>{p.label}</span>
+          <div style={{ 
+            textAlign: "center", padding: "32px", background: "rgba(5,5,20,0.75)",
+            borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(16px)" 
+          }}>
+            <div style={{ fontSize: 32, marginBottom: 16 }}>🗺️</div>
+            
+            <div style={{ marginBottom: 12, letterSpacing: 2, color: "#ffffff44", textTransform: "uppercase", fontSize: 9 }}>
+              Transport Modes
             </div>
-            <div style={{ fontFamily: "monospace", fontSize: 10, color: "#ffffff33", marginTop: 6 }}>
+            
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginBottom: 20 }}>
+              {(Object.entries(MODE_LABELS) as [JourneyMode, string][]).map(([mode, label]) => {
+                const style = MODE_STYLE[mode];
+                return (
+                  <div key={mode} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ 
+                      width: 24, height: 2, 
+                      background: mode === 'sea' ? '#60a5fa' : mode === 'rail' ? '#fbbf24' : mode === 'road' ? '#34d399' : '#a78bfa',
+                      borderTop: style.dashArray ? `2px dashed rgba(255,255,255,0.5)` : 'none',
+                      opacity: 0.8
+                    }} />
+                    <span style={{ color: "#ffffffaa", fontSize: 10, fontFamily: "monospace" }}>{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ fontFamily: "monospace", fontSize: 11, color: "#ffffff55", letterSpacing: 2, textTransform: "uppercase" }}>
+              No routes plotted
+            </div>
+            <div style={{ fontFamily: "monospace", fontSize: 10, color: "#ffffff22", marginTop: 8 }}>
               Click "New Journey" to begin
             </div>
           </div>

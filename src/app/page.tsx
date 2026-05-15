@@ -13,6 +13,7 @@ import { useDisruptionAgent } from "../hooks/useDisruptionAgent";
 import DisruptionAlertBanner from "./components/DisruptionAlertBanner";
 import SimulationPanel from "./components/SimulationPanel";
 import JourneyChatbot from "./components/JourneyChatbot";
+import AgentOrchestrationPanel from "./components/AgentOrchestrationPanel";
 import type { DisruptionEvent } from "../lib/types";
 
 // Leaflet must load client-side only
@@ -476,6 +477,13 @@ export default function App() {
                   }
                 />
               </div>
+
+              {/* ── Multi-Agent Orchestrator ───────────────────────────── */}
+              <AgentOrchestrationPanel
+                journey={selectedJourney}
+                analyses={analyses}
+                simDisruptions={simulatedDisruptions}
+              />
             </div>
 
             {/* Footer actions */}

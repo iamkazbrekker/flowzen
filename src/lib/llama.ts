@@ -1,15 +1,14 @@
-import { createGroq } from '@ai-sdk/groq';
 import Groq from 'groq-sdk';
 
-// ── AI SDK provider (for streaming via Vercel AI SDK) ──
-export const groq = createGroq({
-  apiKey: process.env.GROQ_API_KEY || '',
-});
+// ── Groq SDK client ──────────────────────────────────────────────────────────
+export const groqClient = process.env.GROQ_API_KEY
+  ? new Groq({ apiKey: process.env.GROQ_API_KEY })
+  : null;
 
-// ── Model identifier ──
-export const LLAMA_MODEL = 'llama-3.1-70b-versatile';
+// ── Model identifier ──────────────────────────────────────────────────────────
+export const LLAMA_MODEL = 'llama-3.3-70b-versatile';
 
-// ── System prompt for NLP disruption extraction ──
+// ── System prompt for NLP disruption extraction ───────────────────────────────
 export const DISRUPTION_NLP_PROMPT = `You are a logistics-disruption classifier.
 Given a raw news snippet, return ONLY valid JSON matching this schema:
 
@@ -29,11 +28,6 @@ If the text is NOT about a logistics disruption return:
 
 Return ONLY the JSON object — no markdown fences, no commentary.`;
 
-// ── Direct Groq SDK client (for non-streaming calls) ──
-const groqClient = process.env.GROQ_API_KEY
-  ? new Groq({ apiKey: process.env.GROQ_API_KEY })
-  : null;
-
 export interface LlamaResponse {
   content: string;
   usage?: {
@@ -44,7 +38,7 @@ export interface LlamaResponse {
 }
 
 /**
- * Send a prompt to LLaMA 3.1 70B via Groq and get a completion
+ * Send a prompt to LLaMA via Groq and get a completion
  */
 export async function queryLlama(
   prompt: string,
@@ -52,38 +46,29 @@ export async function queryLlama(
 ): Promise<LlamaResponse> {
   if (!groqClient) {
     console.warn('GROQ_API_KEY is not configured');
-    return {
-      content: 'Groq API key is not configured. Please add GROQ_API_KEY to your .env file.',
-    };
+    return { content: 'Groq API key is not configured. Please add GROQ_API_KEY to your .env file.' };
   }
 
-  try {
-    const completion = await groqClient.chat.completions.create({
-      model: LLAMA_MODEL,
-      messages: [
-        ...(systemPrompt
-          ? [{ role: 'system' as const, content: systemPrompt }]
-          : []),
-        { role: 'user' as const, content: prompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 1024,
-    });
+  const completion = await groqClient.chat.completions.create({
+    model: LLAMA_MODEL,
+    messages: [
+      ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
+      { role: 'user' as const, content: prompt },
+    ],
+    temperature: 0.7,
+    max_tokens: 1024,
+  });
 
-    return {
-      content: completion.choices[0]?.message?.content || '',
-      usage: completion.usage
-        ? {
-            prompt_tokens: completion.usage.prompt_tokens,
-            completion_tokens: completion.usage.completion_tokens,
-            total_tokens: completion.usage.total_tokens,
-          }
-        : undefined,
-    };
-  } catch (error: any) {
-    console.error('Groq/LLaMA error:', error.message || error);
-    throw error;
-  }
+  return {
+    content: completion.choices[0]?.message?.content ?? '',
+    usage: completion.usage
+      ? {
+          prompt_tokens: completion.usage.prompt_tokens,
+          completion_tokens: completion.usage.completion_tokens,
+          total_tokens: completion.usage.total_tokens,
+        }
+      : undefined,
+  };
 }
 
 /**
