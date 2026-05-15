@@ -1,10 +1,7 @@
-// Next.js App Router API Route: GET /api/disruptions
-// Runs the full FlowzenModel pipeline: NewsAPI → NLP → Deduplicate → JSON response
-
 import { NextResponse } from "next/server";
 import { runPipeline } from "@/lib/pipeline";
 
-export const dynamic = "force-dynamic"; // always run fresh, never cache
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
