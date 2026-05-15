@@ -7,7 +7,6 @@ import type { Journey, JourneyLeg, JourneyMode } from "./JourneyBuilder";
 import { calculateSeaRoute } from "../data/seaRoutes";
 import type { LegAnalysis } from "../../hooks/useDisruptionAgent";
 
-// d
 export interface MapHandle {
   zoomIn: () => void;
   zoomOut: () => void;
