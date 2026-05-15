@@ -4,13 +4,16 @@ import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Bell, Settings, Plus, Minus, Globe,
-  X, Route, Trash2, ChevronRight, Layers, ShieldAlert,
+  X, Route, Trash2, ChevronRight, Layers,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { MapHandle } from "./components/Map";
 import JourneyBuilder, { type Journey, type JourneyLeg } from "./components/JourneyBuilder";
 import { useDisruptionAgent } from "../hooks/useDisruptionAgent";
 import DisruptionAlertBanner from "./components/DisruptionAlertBanner";
+import SimulationPanel from "./components/SimulationPanel";
+import JourneyChatbot from "./components/JourneyChatbot";
+import type { DisruptionEvent } from "../lib/types";
 
 // Leaflet must load client-side only
 const Map = dynamic(() => import("./components/Map"), { ssr: false });
@@ -48,6 +51,15 @@ export default function App() {
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
   const [selectedLeg, setSelectedLeg] = useState<JourneyLeg | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [simulatedDisruptions, setSimulatedDisruptions] = useState<DisruptionEvent[]>([]);
+
+  const handleAddSim = useCallback((d: DisruptionEvent) => {
+    setSimulatedDisruptions(prev => [...prev, d]);
+  }, []);
+  const handleRemoveSim = useCallback((idx: number) => {
+    setSimulatedDisruptions(prev => prev.filter((_, i) => i !== idx));
+  }, []);
+  const handleClearSim = useCallback(() => setSimulatedDisruptions([]), []);
 
   // ── Disruption Agent ──────────────────────────────────────────────────────
   const {
@@ -57,10 +69,9 @@ export default function App() {
     lastFetched,
     criticalAlerts,
     getLegAnalysis,
-  } = useDisruptionAgent(journeys);
+  } = useDisruptionAgent(journeys, simulatedDisruptions);
 
   const refreshAgent = useCallback(() => {
-    // Force re-trigger by bumping journeys ref — agent hook reacts to journeys
     setJourneys(prev => [...prev]);
   }, []);
 
@@ -190,7 +201,7 @@ export default function App() {
         <div style={{ position:"relative", width:"100%", height:"100%" }}>
           {/* Map fills full container */}
           <div style={{ position:"absolute", inset:0, zIndex:0 }}>
-            <Map ref={mapRef} journeys={journeys} onLegClick={handleLegClick} />
+            <Map ref={mapRef} journeys={journeys} onLegClick={handleLegClick} analyses={analyses} />
           </div>
 
           {/* Scanline overlay */}
@@ -404,6 +415,38 @@ export default function App() {
                   </div>
                 </div>
               )}
+              {/* ── Simulation Panel ───────────────────────────────────── */}
+              <SimulationPanel
+                simDisruptions={simulatedDisruptions}
+                onAdd={handleAddSim}
+                onRemove={handleRemoveSim}
+                onClear={handleClearSim}
+              />
+
+              {/* ── AI Chatbot ─────────────────────────────────────────── */}
+              <div style={{ marginTop: 12 }}>
+                <JourneyChatbot
+                  journey={selectedJourney}
+                  disruptions={disruptions}
+                  simulatedDisruptions={simulatedDisruptions}
+                  analyses={analyses.filter(a => !a.loading).map(a => ({ legId: a.legId, result: a.result }))}
+                  legsMeta={selectedJourney.legs
+                    .filter(l => l.from && l.to)
+                    .map(l => {
+                      const meta = MODE_META[l.mode];
+                      const distKm = l.from && l.to ? dist([l.from.lat, l.from.lng], [l.to.lat, l.to.lng]) : 0;
+                      return {
+                        id: l.id,
+                        fromName: l.from!.name,
+                        toName: l.to!.name,
+                        mode: l.mode,
+                        distKm,
+                        durationHr: meta ? Math.round(distKm / meta.speed * 10) / 10 : 0,
+                      };
+                    })
+                  }
+                />
+              </div>
             </div>
 
             {/* Footer actions */}
