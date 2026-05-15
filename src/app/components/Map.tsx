@@ -201,9 +201,9 @@ export default function Map({ onRouteClick }: MapProps) {
           </div>
           {(Object.entries(MODE_PROFILES) as [string, typeof MODE_PROFILES[keyof typeof MODE_PROFILES]][]).map(([mode, p]) => (
             <div key={mode} style={{ display:"flex", alignItems:"center", gap:7, marginBottom:4 }}>
-              <div style={{ width:22, height:2, background:p.color,
-                borderRadius:1, borderTop: p.dashArray ? `2px dashed ${p.color}` : undefined,
-                background: p.dashArray ? "transparent" : p.color }} />
+              <div style={{ width:22, height:2,
+                background: p.dashArray ? "transparent" : p.color,
+                borderRadius:1, borderTop: p.dashArray ? `2px dashed ${p.color}` : undefined }} />
               <span style={{ color:"#ffffffaa" }}>{p.label}</span>
             </div>
           ))}
