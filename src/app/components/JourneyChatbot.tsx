@@ -6,6 +6,7 @@ import { MessageCircle, Send, Loader2, X, ChevronDown, Bot, Sparkles } from "luc
 import type { DisruptionEvent } from "@/lib/types";
 import type { RerouteResult } from "../api/agent/reroute/route";
 import type { Journey } from "./JourneyBuilder";
+import TextScramble from "./TextScramble";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -37,6 +38,31 @@ const SUGGESTED_QUESTIONS = [
   "Summarise active disruptions",
   "What's the worst delay expected?",
 ];
+
+function FormattedMessage({ content }: { content: string }) {
+  return (
+    <>
+      {content.split(/(\*\*.*?\*\*|`.*?`|\[.*?\]\(.*?\))/g).map((part, i) => {
+        if (!part) return null;
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={i} style={{ color: "#fff", fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
+        }
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return <code key={i} style={{ background: "rgba(255,255,255,0.1)", padding: "2px 4px", borderRadius: 4, fontSize: 10, color: "#93c5fd", fontFamily: "monospace" }}>{part.slice(1, -1)}</code>;
+        }
+        if (part.startsWith("[") && part.includes("](") && part.endsWith(")")) {
+          const textMatch = part.match(/\[(.*?)\]/);
+          const urlMatch = part.match(/\((.*?)\)/);
+          if (textMatch && urlMatch) {
+            return <a key={i} href={urlMatch[1]} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", textDecoration: "underline" }}>{textMatch[1]}</a>;
+          }
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </>
+  );
+}
+
 
 export default function JourneyChatbot({ journey, disruptions, simulatedDisruptions, analyses, legsMeta }: Props) {
   const [open, setOpen] = useState(false);
@@ -140,7 +166,7 @@ export default function JourneyChatbot({ journey, disruptions, simulatedDisrupti
           >
             <div style={{
               border: "1px solid rgba(96,165,250,0.2)", borderRadius: 12,
-              background: "rgba(5,5,18,0.95)", overflow: "hidden",
+              background: "rgba(15,15,15,0.95)", overflow: "hidden",
             }}>
               {/* Chat header */}
               <div style={{
@@ -156,7 +182,7 @@ export default function JourneyChatbot({ journey, disruptions, simulatedDisrupti
                   <Bot style={{ width: 13, height: 13, color: "#fff" }} />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#93c5fd" }}>FLOWZEN AI</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#93c5fd" }}><TextScramble text="FLOWZEN AI" delay={150} /></div>
                   <div style={{ fontSize: 8, color: "#ffffff33", letterSpacing: 1 }}>Journey Copilot · Powered by Llama 3</div>
                 </div>
                 <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80", boxShadow: "0 0 6px #4ade80" }} />
@@ -201,7 +227,7 @@ export default function JourneyChatbot({ journey, disruptions, simulatedDisrupti
                         borderTopRightRadius: msg.role === "user" ? 2 : 10,
                         borderTopLeftRadius: msg.role === "assistant" ? 2 : 10,
                       }}>
-                        {msg.content}
+                        <FormattedMessage content={msg.content} />
                       </div>
                     </motion.div>
                   ))}

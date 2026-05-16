@@ -24,9 +24,10 @@ interface Props {
 export default function DisruptionAlertBanner({ criticalAlerts, loading, lastFetched, disruptionCount, onRefresh }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [bannerClosed, setBannerClosed] = useState(false);
 
   const visible = criticalAlerts.filter(a => !dismissed.has(a.legId));
-  if (!loading && visible.length === 0 && disruptionCount === 0) return null;
+  if (bannerClosed || (!loading && visible.length === 0 && disruptionCount === 0)) return null;
 
   const worstSev = visible.reduce((acc, a) => {
     const order: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1, none: 0 };
@@ -43,7 +44,7 @@ export default function DisruptionAlertBanner({ criticalAlerts, loading, lastFet
         exit={{ y: -80, opacity: 0 }}
         transition={{ type: "spring", stiffness: 280, damping: 28 }}
         style={{
-          position: "fixed", top: 56, left: 0, right: 0, zIndex: 600,
+          position: "fixed", top: 56, left: 0, right: 0, zIndex: 390,
           background: colors.bg, borderBottom: `1px solid ${colors.border}`,
           boxShadow: colors.glow, backdropFilter: "blur(12px)",
           fontFamily: "'Inter', monospace",
@@ -92,6 +93,11 @@ export default function DisruptionAlertBanner({ criticalAlerts, loading, lastFet
               {expanded ? "Hide" : "View"} details
             </button>
           )}
+
+          <button onClick={() => setBannerClosed(true)} title="Close banner"
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#ffffff55", display: "flex", alignItems: "center", marginLeft: 4 }}>
+            <X style={{ width: 12, height: 12 }} />
+          </button>
         </div>
 
         {/* Expanded details */}

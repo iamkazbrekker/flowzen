@@ -175,7 +175,7 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
       const s = document.createElement("style");
       s.id = "fz-map-css";
       s.textContent = `
-        .leaflet-container { background:#050508 !important; }
+        .leaflet-container { background:#0a0a0a !important; }
         @keyframes fzPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.7)} }
         @keyframes fzDash { to { stroke-dashoffset: -30; } }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -381,7 +381,7 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
           zIndex: 10,
         }}>
           <div style={{
-            textAlign: "center", padding: "32px", background: "rgba(5,5,20,0.75)",
+            textAlign: "center", padding: "32px", background: "rgba(10,10,10,0.75)",
             borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(16px)"
           }}>
             <div style={{ fontSize: 32, marginBottom: 16 }}>🗺️</div>
@@ -421,7 +421,7 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
       {ready && journeys.length > 0 && (
         <div style={{
           position: "absolute", bottom: 16, right: 16,
-          background: "rgba(5,5,8,0.92)", border: "1px solid rgba(255,255,255,0.07)",
+          background: "rgba(10,10,10,0.92)", border: "1px solid rgba(255,255,255,0.07)",
           borderRadius: 8, padding: "10px 14px", fontFamily: "monospace",
           fontSize: 9, color: "#fff", backdropFilter: "blur(12px)",
           zIndex: 1000, pointerEvents: "none", minWidth: 170,

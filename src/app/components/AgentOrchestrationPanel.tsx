@@ -12,6 +12,7 @@ import type { Journey } from "./JourneyBuilder";
 import type { DisruptionEvent } from "@/lib/types";
 import type { AgentStep, AgentName } from "../api/agent/orchestrate/route";
 import { useOrchestrator } from "@/hooks/useOrchestrator";
+import TextScramble from "./TextScramble";
 
 // ── Agent visual config ────────────────────────────────────────────────────────
 const AGENT_META: Record<AgentName, { label: string; color: string; icon: React.FC<{ style?: React.CSSProperties }> }> = {
@@ -158,7 +159,7 @@ export default function AgentOrchestrationPanel({ journey, analyses, simDisrupti
         <BotMessageSquare style={{ width: 14, height: 14, color: "#818cf8", flexShrink: 0 }} />
         <div style={{ flex: 1, textAlign: "left" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#a5b4fc", letterSpacing: 0.5 }}>
-            Multi-Agent Orchestrator
+            <TextScramble text="Multi-Agent Orchestrator" delay={200} />
           </div>
           <div style={{ fontSize: 9, color: "#ffffff44" }}>
             Auto-fires on every disruption · Planner → Reroute → Cost
@@ -386,7 +387,7 @@ export default function AgentOrchestrationPanel({ journey, analyses, simDisrupti
               {steps.length > 0 && (
                 <div>
                   <div style={{ fontSize: 8, color: "#ffffff2a", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>
-                    Agent Trace ({steps.length} steps)
+                    <TextScramble text={`Agent Trace (${steps.length} steps)`} delay={150} />
                   </div>
                   {steps.map((step, i) => (
                     <StepCard key={`${step.agent}-${step.iteration}-${i}`} step={step} index={i} />

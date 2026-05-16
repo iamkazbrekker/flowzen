@@ -1,0 +1,91 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# FlowZen — docker-compose.yml
+# Orchestrates:
+#   • flowzen      — the Next.js application
+#   • redis        — optional in-memory cache (rate-limiting / session)
+#
+# Usage:
+#   docker compose up --build          # first run
+#   docker compose up -d               # detached (background)
+#   docker compose down                # stop and remove containers
+#   docker compose down -v             # also remove named volumes
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── Next.js application ───────────────────────────────────────────────────
+  flowzen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Override the Node version if needed, e.g.: --build-arg NODE_VERSION=22-alpine
+      args:
+        NODE_VERSION: "20-alpine"
+    image: flowzen:latest
+    container_name: flowzen_app
+    restart: unless-stopped
+
+    # Publish port 3000 inside the container to 3000 on the host.
+    # Change the host port (left side) if something else is already on 3000.
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+
+    # Load every variable from .env.local (copy .env.example → .env.local first)
+    env_file:
+      - .env.local
+
+    # Extra environment overrides (these take precedence over env_file)
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      # Redis URL used by any optional caching layer you add later
+      REDIS_URL: "redis://redis:6379"
+
+    # Named volume so the public/ CSV data files can be shared / replaced
+    # without rebuilding the image.
+    volumes:
+      - ./public:/app/public:ro
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    networks:
+      - flowzen_net
+
+  # ── Redis (optional cache / queue backend) ────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: flowzen_redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - flowzen_net
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+volumes:
+  redis_data:
+    driver: local
+
+# ── Custom network (isolated bridge) ─────────────────────────────────────────
+networks:
+  flowzen_net:
+    driver: bridge

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Plus, Trash2, Plane, Ship, Train, Truck, X, Route, ChevronDown, Loader2 } from "lucide-react";
 import type { LocationResult } from "../api/search-location/route";
+import TextScramble from "./TextScramble";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type JourneyMode = "road" | "rail" | "sea" | "air";
@@ -146,7 +147,7 @@ function LocationSearch({
             initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
             style={{
               position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 9999,
-              background: "rgba(10,10,20,0.97)", border: "1px solid rgba(255,255,255,0.1)",
+              background: "rgba(15,15,15,0.97)", border: "1px solid rgba(255,255,255,0.1)",
               borderRadius: 8, overflow: "hidden", maxHeight: 200, overflowY: "auto",
               boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
             }}>
@@ -254,7 +255,7 @@ export default function JourneyBuilder({ onClose, onAdd, initialJourney }: Journ
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
       style={{
         position: "fixed", right: 0, top: 56, bottom: 0, width: 420, zIndex: 10000,
-        background: "rgba(6,6,16,0.97)", borderLeft: "1px solid rgba(255,255,255,0.07)",
+        background: "rgba(15,15,15,0.97)", borderLeft: "1px solid rgba(255,255,255,0.07)",
         backdropFilter: "blur(20px)", display: "flex", flexDirection: "column",
         fontFamily: "'Inter', monospace",
       }}
@@ -263,7 +264,7 @@ export default function JourneyBuilder({ onClose, onAdd, initialJourney }: Journ
       <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 12 }}>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 9, letterSpacing: 3, color: "#ffffff33", textTransform: "uppercase", marginBottom: 4 }}>
-            Journey Builder
+            <TextScramble text="Journey Builder" delay={150} />
           </div>
           <input
             value={journeyName}

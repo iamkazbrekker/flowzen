@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# FlowZen — Dockerfile.dev
+# Lightweight image for local development (hot-reload via `npm run dev`)
+# Source code is bind-mounted at runtime — no build step here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM node:20-alpine
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+# Copy manifests and install deps (cached layer)
+COPY package.json package-lock.json ./
+RUN npm ci --legacy-peer-deps
+
+# Copy source (will be overridden by the bind-mount in docker-compose.dev.yml)
+COPY . .
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

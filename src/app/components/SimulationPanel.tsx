@@ -7,6 +7,7 @@ import {
   FlaskConical, AlertTriangle, CheckCircle2, X
 } from "lucide-react";
 import type { DisruptionEvent } from "@/lib/types";
+import TextScramble from "./TextScramble";
 
 // ─── Severity badge colours ───────────────────────────────────────────────────
 const SEV_COLORS: Record<string, { bg: string; border: string; text: string }> = {
@@ -79,7 +80,7 @@ export default function SimulationPanel({ simDisruptions, onAdd, onRemove, onCle
         <FlaskConical style={{ width: 14, height: 14, color: "#a78bfa", flexShrink: 0 }} />
         <div style={{ flex: 1, textAlign: "left" }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#c4b5fd", letterSpacing: 0.5 }}>
-            Run Simulation
+            <TextScramble text="Run Simulation" delay={150} />
           </div>
           <div style={{ fontSize: 9, color: "#ffffff44", letterSpacing: 0.5 }}>
             Inject custom disruptions into the rerouting agent
@@ -211,7 +212,7 @@ export default function SimulationPanel({ simDisruptions, onAdd, onRemove, onCle
                 <div style={{ marginTop: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
                     <span style={{ fontSize: 8, color: "#ffffff33", textTransform: "uppercase", letterSpacing: 2, flex: 1 }}>
-                      Active Simulations ({simDisruptions.length})
+                      <TextScramble text={`Active Simulations (${simDisruptions.length})`} delay={200} />
                     </span>
                     <button onClick={onClear} style={{ fontSize: 9, color: "#ff6666", background: "none", border: "none", cursor: "pointer" }}>
                       Clear all

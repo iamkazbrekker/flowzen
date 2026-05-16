@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# FlowZen — docker-compose.dev.yml
+# Development override — hot-reload, source-mounted, dev server
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  flowzen:
+    # Override: use the dev-specific Dockerfile target (no build step)
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    # Override the production CMD with the dev server
+    command: npm run dev
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: "1"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      REDIS_URL: "redis://redis:6379"
+    env_file:
+      - .env.local
+    # Mount the entire source tree for hot-reload
+    # node_modules comes from the image — keep it isolated
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    # Disable the production healthcheck — dev server starts slower
+    healthcheck:
+      disable: true
+    depends_on:
+      - redis
+    networks:
+      - flowzen_net
