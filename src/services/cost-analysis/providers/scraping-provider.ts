@@ -15,8 +15,8 @@ export interface ScrapedFare {
   is_live: boolean;
 }
 
-const MAX_RETRIES = 2;
-const SCRAPE_TIMEOUT = 30000; // 30 seconds
+const MAX_RETRIES = 1;
+const SCRAPE_TIMEOUT = 15000; // Reduced to 15 seconds
 
 export async function scrapeLiveFares(
   source: string,
@@ -29,31 +29,26 @@ export async function scrapeLiveFares(
   let browser: Browser | null = null;
 
   try {
-    // Launch headless chromium
     browser = await chromium.launch({ 
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     
     const context = await browser.newContext({
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 720 }
     });
     
     const page = await context.newPage();
+    // Block unnecessary resources (images, css, fonts) to speed up loading
+    await page.route('**/*.{png,jpg,jpeg,gif,svg,css,woff,woff2}', route => route.abort());
 
-    // ─── AIR FREIGHT SCRAPE ──────────────────────────────────────────────────
-    // Targeting a public freight calculator (Example: SeaRates or similar)
-    // For the hackathon, we simulate the navigation to a specific provider
     try {
       await scrapeSeaRates(page, source, destination, weightKg, fares);
     } catch (err) {
       console.warn(`[Scraper] SeaRates scrape failed: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    // ─── OTHER MODES ────────────────────────────────────────────────────────
-    // In a full implementation, we would add specialized scrapers for Air/Road/Rail
-    // For the demo, we ensure at least one live-scraped result exists or return empty
-    
   } catch (err) {
     console.error(`[Scraper] Global scraping error: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
@@ -73,33 +68,26 @@ async function scrapeSeaRates(
   weightKg: number,
   results: ScrapedFare[]
 ) {
-  // Navigation
+  // Navigation - use domcontentloaded for speed
   await page.goto("https://www.searates.com/freight/", { 
-    waitUntil: "networkidle", 
+    waitUntil: "domcontentloaded", 
     timeout: SCRAPE_TIMEOUT 
   });
 
-  // Fill search form (Simplified selectors for demonstration)
-  // Note: Real selectors depend on the current site DOM
   try {
-    // Fill Origin
     const originInput = page.locator('input[placeholder*="Origin"], input[name*="origin"]');
     await originInput.first().fill(source);
-    await page.waitForTimeout(1000);
     await page.keyboard.press("Enter");
 
-    // Fill Destination
     const destInput = page.locator('input[placeholder*="Destination"], input[name*="destination"]');
     await destInput.first().fill(destination);
-    await page.waitForTimeout(1000);
     await page.keyboard.press("Enter");
 
-    // Click Search
     const searchBtn = page.locator('button:has-text("Search"), button:has-text("Get Quote")');
     await searchBtn.first().click();
 
-    // Wait for JS-rendered results
-    await page.waitForSelector('.price, .fare, [class*="price"]', { timeout: 15000 });
+    // Reduced wait time for results
+    await page.waitForSelector('.price, .fare, [class*="price"]', { timeout: 8000 });
 
     // Extract Data
     const priceText = await page.locator('.price, .fare, [class*="price"]').first().innerText();

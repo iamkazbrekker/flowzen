@@ -4,7 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Search, Bell, Settings, Plus, Minus, Globe,
-  X, Route, Trash2, ChevronRight, Layers,
+  X, Route, Trash2, ChevronRight, Layers, TrendingUp,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { MapHandle } from "./components/Map";
@@ -180,6 +180,22 @@ export default function App() {
             <Search style={{ width: 12, height: 12, color: "#ffffff44" }} />
             <span style={{ fontSize: 11, color: "#ffffff33" }}>Search…</span>
           </div>
+
+          <button
+            onClick={() => setShowCargoAnalysis(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: 7, padding: "7px 14px",
+              background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.25)",
+              borderRadius: 8, cursor: "pointer", color: "#93c5fd", fontSize: 11, fontWeight: 600,
+              transition: "all 0.2s"
+            }}
+            onMouseOver={e => e.currentTarget.style.background = "rgba(96,165,250,0.15)"}
+            onMouseOut={e => e.currentTarget.style.background = "rgba(96,165,250,0.08)"}
+          >
+            <TrendingUp style={{ width: 12, height: 12 }} />
+            Live Analysis
+          </button>
+
           <Bell style={{ width: 16, height: 16, color: "#ffffff44", cursor: "pointer" }} />
           <Settings style={{ width: 16, height: 16, color: "#ffffff44", cursor: "pointer" }} />
         </div>
@@ -280,7 +296,10 @@ export default function App() {
               >
                 <X className="w-5 h-5 text-white/60" />
               </button>
-              <CargoAnalysis />
+              <CargoAnalysis 
+                source={selectedJourney?.legs[0]?.from?.name} 
+                destination={selectedJourney?.legs[selectedJourney.legs.length - 1]?.to?.name}
+              />
             </motion.div>
           </motion.div>
         )}
@@ -448,6 +467,24 @@ export default function App() {
                       ));
                     })()}
                   </div>
+
+                  <button
+                    onClick={() => setShowCargoAnalysis(true)}
+                    style={{
+                      width: "100%", marginTop: 12, padding: "10px", borderRadius: 10,
+                      background: "rgba(37,99,235,0.15)", border: "1px solid rgba(37,99,235,0.4)",
+                      color: "#60a5fa", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      transition: "all 0.2s"
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = "rgba(37,99,235,0.25)"}
+                    onMouseOut={e => e.currentTarget.style.background = "rgba(37,99,235,0.15)"}
+                  >
+                    <div style={{ p: 1, background: "rgba(37,99,235,0.2)", borderRadius: 6 }}>
+                      <TrendingUp style={{ width: 12, height: 12 }} />
+                    </div>
+                    Live AI Cost Analysis
+                  </button>
                 </div>
               )}
               {/* ── Simulation Panel ───────────────────────────────────── */}

@@ -39,25 +39,6 @@ async function handleAnalysis(req: NextRequest) {
     const cargoType = getParam("cargo_type") || getParam("type") || getParam("cargo");
     const priority = getParam("priority") || "standard";
 
-    // --- DEMO MODE ---
-    // If NO parameters are provided, run a default "Mumbai -> Rotterdam" demo
-    // This ensures that visiting the URL in a browser returns a "WOW" result instead of an error.
-    if (!source && !destination && !weightRaw) {
-      console.log("[/api/cost-analysis] No params provided. Running DEMO mode: Mumbai -> Rotterdam");
-      const demoRequest: CargoRequest = {
-        source: "Mumbai",
-        destination: "Rotterdam",
-        cargo_weight_kg: 5000,
-        cargo_type: "electronics",
-        priority: "standard",
-      };
-      const result = await runCostAnalysis(demoRequest);
-      return NextResponse.json({
-        info: "This is a DEMO result because no parameters were provided. Add ?source=... to customize.",
-        ...result
-      }, { status: 200 });
-    }
-
     if (!source || !destination || !weightRaw || !cargoType) {
       return NextResponse.json(
         {

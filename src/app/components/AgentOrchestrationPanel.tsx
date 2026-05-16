@@ -115,7 +115,7 @@ function StepCard({ step, index }: { step: AgentStep; index: number }) {
 // ── Main panel ─────────────────────────────────────────────────────────────────
 export default function AgentOrchestrationPanel({ journey, analyses, simDisruptions }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const [costLimit] = useState(50_000);
+  const [costLimit] = useState(500_000);
 
   const { running, results, steps, error, rerun } = useOrchestrator(
     [journey],
@@ -127,7 +127,7 @@ export default function AgentOrchestrationPanel({ journey, analyses, simDisrupti
   const affectedCount = analyses.filter(a => !a.loading && a.result?.affected).length;
   const totalSolved   = results.filter(r => r.solved).length;
   const totalFailed   = results.filter(r => !r.solved).length;
-  const totalCost     = results.reduce((s, r) => s + r.finalCostUsd, 0);
+  const totalCost     = results.reduce((s, r) => s + r.finalCostInr, 0);
   const hasResults    = results.length > 0;
   const anyLoading    = analyses.some(a => a.loading);
 
@@ -314,7 +314,7 @@ export default function AgentOrchestrationPanel({ journey, analyses, simDisrupti
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
                       {[
                         ["Mode",    r.finalMode.toUpperCase()],
-                        ["Cost",    `$${r.finalCostUsd.toLocaleString()}`],
+                        ["Cost",    `₹${r.finalCostInr.toLocaleString()}`],
                         ["Transit", `${r.finalTransitDays}d`],
                       ].map(([k, v]) => (
                         <span key={k} style={{
@@ -344,7 +344,7 @@ export default function AgentOrchestrationPanel({ journey, analyses, simDisrupti
                     Total Journey Cost Est.
                   </span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "#a5b4fc" }}>
-                    ${totalCost.toLocaleString()}
+                    ₹{totalCost.toLocaleString()}
                   </span>
                 </div>
               )}

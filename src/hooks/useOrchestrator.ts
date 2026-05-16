@@ -41,7 +41,7 @@ export function useOrchestrator(
   journeys: Journey[],
   analyses: LegAnalysis[],
   simDisruptions: DisruptionEvent[],
-  costThresholdUsd: number = 50_000
+  costThresholdInr: number = 500_000
 ): OrchestratorState & { rerun: () => void } {
   const [state, setState] = useState<OrchestratorState>({
     running: false,
@@ -103,7 +103,7 @@ export function useOrchestrator(
               cargoType: "general",
             },
             disruptions: allDisruptions,
-            costThresholdUsd,
+            costThresholdInr,
             maxIterations: 4,
           }),
         });
@@ -133,7 +133,7 @@ export function useOrchestrator(
     if (!signal.aborted) {
       setState(prev => ({ ...prev, running: false }));
     }
-  }, [costThresholdUsd]);
+  }, [costThresholdInr]);
 
   // Main auto-trigger effect
   useEffect(() => {
