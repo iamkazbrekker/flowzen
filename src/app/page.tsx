@@ -181,21 +181,6 @@ export default function App() {
             <span style={{ fontSize: 11, color: "#ffffff33" }}>Search…</span>
           </div>
 
-          <button
-            onClick={() => setShowCargoAnalysis(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: 7, padding: "7px 14px",
-              background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.25)",
-              borderRadius: 8, cursor: "pointer", color: "#93c5fd", fontSize: 11, fontWeight: 600,
-              transition: "all 0.2s"
-            }}
-            onMouseOver={e => e.currentTarget.style.background = "rgba(96,165,250,0.15)"}
-            onMouseOut={e => e.currentTarget.style.background = "rgba(96,165,250,0.08)"}
-          >
-            <TrendingUp style={{ width: 12, height: 12 }} />
-            Live Analysis
-          </button>
-
           <Bell style={{ width: 16, height: 16, color: "#ffffff44", cursor: "pointer" }} />
           <Settings style={{ width: 16, height: 16, color: "#ffffff44", cursor: "pointer" }} />
         </div>
@@ -275,35 +260,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* --- CARGO ANALYSIS MODAL --- */}
-      <AnimatePresence>
-        {showCargoAnalysis && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[10000] bg-background/80 backdrop-blur-md flex items-center justify-center p-6"
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="relative w-full max-w-5xl max-h-[90vh] overflow-y-auto bg-surface-dim border border-white/5 rounded-3xl shadow-2xl custom-scrollbar"
-            >
-              <button
-                onClick={() => setShowCargoAnalysis(false)}
-                className="absolute top-6 right-6 p-2 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 transition-colors z-10"
-              >
-                <X className="w-5 h-5 text-white/60" />
-              </button>
-              <CargoAnalysis 
-                source={selectedJourney?.legs[0]?.from?.name} 
-                destination={selectedJourney?.legs[selectedJourney.legs.length - 1]?.to?.name}
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ── ROUTE INTELLIGENCE PANEL ───────────────────────────────────────── */}
       <AnimatePresence>
@@ -467,24 +423,6 @@ export default function App() {
                       ));
                     })()}
                   </div>
-
-                  <button
-                    onClick={() => setShowCargoAnalysis(true)}
-                    style={{
-                      width: "100%", marginTop: 12, padding: "10px", borderRadius: 10,
-                      background: "rgba(37,99,235,0.15)", border: "1px solid rgba(37,99,235,0.4)",
-                      color: "#60a5fa", fontSize: 11, fontWeight: 600, cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                      transition: "all 0.2s"
-                    }}
-                    onMouseOver={e => e.currentTarget.style.background = "rgba(37,99,235,0.25)"}
-                    onMouseOut={e => e.currentTarget.style.background = "rgba(37,99,235,0.15)"}
-                  >
-                    <div style={{ p: 1, background: "rgba(37,99,235,0.2)", borderRadius: 6 }}>
-                      <TrendingUp style={{ width: 12, height: 12 }} />
-                    </div>
-                    Live AI Cost Analysis
-                  </button>
                 </div>
               )}
               {/* ── Simulation Panel ───────────────────────────────────── */}
