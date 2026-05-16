@@ -11,7 +11,7 @@ async function handleAnalysis(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     let body: any = {};
-    
+
     // Attempt to parse body for POST/PUT
     if (req.method !== "GET") {
       try {
@@ -32,16 +32,13 @@ async function handleAnalysis(req: NextRequest) {
 
     // Extract with fallback logic and case-insensitivity
     const getParam = (name: string) => body[name] || searchParams.get(name);
-    
+
     const source = getParam("source");
     const destination = getParam("destination");
     const weightRaw = getParam("cargo_weight_kg") || getParam("weight") || getParam("cargo_weight");
     const cargoType = getParam("cargo_type") || getParam("type") || getParam("cargo");
     const priority = getParam("priority") || "standard";
 
-    // --- DEMO MODE ---
-    // If NO parameters are provided, run a default "Mumbai -> Rotterdam" demo
-    // This ensures that visiting the URL in a browser returns a "WOW" result instead of an error.
     if (!source && !destination && !weightRaw) {
       console.log("[/api/cost-analysis] No params provided. Running DEMO mode: Mumbai -> Rotterdam");
       const demoRequest: CargoRequest = {

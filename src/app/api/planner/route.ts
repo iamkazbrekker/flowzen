@@ -24,7 +24,7 @@ INSTRUCTIONS:
 - If you don't have enough data, say so honestly.`;
 
     const stream = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "llama-3.1-8b-instant",
       stream: true,
       messages: [
         { role: "system", content: systemPrompt },

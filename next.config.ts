@@ -10,6 +10,7 @@ import type { NextConfig } from "next";
  */
 const nextConfig: NextConfig = {
   output: "standalone",
+  serverExternalPackages: ["playwright", "playwright-core"],
 
   // Allow images from external domains if you add next/image usage later
   images: {
