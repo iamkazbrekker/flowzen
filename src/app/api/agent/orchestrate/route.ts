@@ -50,7 +50,7 @@ export interface OrchestrationResult {
   solved: boolean;
   iterations: number;
   finalMode: string;
-  finalCostUsd: number;
+  finalCostInr: number;
   finalTransitDays: number;
   finalRecommendation: string;
   steps: AgentStep[];
@@ -133,6 +133,8 @@ Iteration: ${iteration}`
   };
 }
 
+import { runCostAnalysis, CargoRequest } from "@/services/cost-analysis";
+
 // ── Sub-agent: Cargo Cost ─────────────────────────────────────────────────────
 async function runCargoAgent(
   traceId: string | null,
@@ -141,30 +143,46 @@ async function runCargoAgent(
   mode: string,
   disruptions: DisruptionEvent[],
   iteration: number,
-  costThresholdUsd: number
-): Promise<{ step: AgentStep; costUsd: number; transitDays: number; viable: boolean }> {
+  costThresholdInr: number
+): Promise<{ step: AgentStep; costInr: number; transitDays: number; viable: boolean }> {
   const t0 = Date.now();
-  const weightKg = leg.cargoWeightKg ?? 5000;
-  const days = TRANSIT_DAYS[mode] ?? 10;
-  const costUsd = estimateCost(mode, weightKg, days);
-  const viable = costUsd <= costThresholdUsd;
-  const input = { mode, weightKg, cargoType: leg.cargoType ?? "general", thresholdUsd: costThresholdUsd };
+  
+  const analysisRequest: CargoRequest = {
+    source: leg.fromName,
+    destination: leg.toName,
+    cargo_weight_kg: leg.cargoWeightKg ?? 5000,
+    cargo_type: leg.cargoType ?? "general",
+    priority: "standard"
+  };
 
-  const spanId = traceId ? await startSpan(traceId, parentSpanId, "cargo_cost_agent", input) : null;
+  const spanId = traceId ? await startSpan(traceId, parentSpanId, "cargo_cost_agent", { mode, ...analysisRequest }) : null;
 
-  const reasoning = await callGroq(
-    `You are a cargo cost analyst. Evaluate whether a shipping cost is acceptable for a logistics operation. Respond in 2 sentences.`,
-    `Route: ${leg.fromName} → ${leg.toName}
-Mode: ${mode}
-Cargo: ${weightKg}kg of ${leg.cargoType ?? "general goods"}
-Estimated cost: $${costUsd.toLocaleString()}
-Cost threshold: $${costThresholdUsd.toLocaleString()}
-Transit days: ${days}
-Active disruptions: ${disruptions.map(d => d.title).join(", ")}
-Is this viable? ${viable ? "YES" : "NO - exceeds threshold"}`
-  );
+  let costInr = 0;
+  let transitDays = 10;
+  let viable = false;
+  let reasoning = "";
+  let isLive = false;
 
-  const output = { costUsd, transitDays: days, viable };
+  try {
+    // RUN THE ACTUAL LIVE COST ANALYSIS PIPELINE
+    const result = await runCostAnalysis(analysisRequest);
+    const modeData = result.mode_estimates.find(m => m.mode === mode);
+    
+    if (modeData) {
+      costInr = modeData.adjusted_cost_inr;
+      transitDays = modeData.adjusted_transit_days;
+      viable = costInr <= costThresholdInr;
+      isLive = modeData.is_live;
+      reasoning = `Live Analysis: ${mode.toUpperCase()} cost is ₹${costInr.toLocaleString()}. ${isLive ? "Data verified via live scraping." : "Using market index fallback."} Viability: ${viable ? "YES" : "NO - exceeds threshold"}.`;
+    } else {
+      throw new Error(`Mode ${mode} not found in analysis`);
+    }
+  } catch (err) {
+    reasoning = `Error in cost analysis: ${err instanceof Error ? err.message : String(err)}`;
+    costInr = 9999999; // fail safe
+  }
+
+  const output = { costInr, transitDays, viable, isLive };
   if (traceId && spanId) await endSpan(traceId, spanId, output, viable ? "success" : "failed");
 
   return {
@@ -172,13 +190,13 @@ Is this viable? ${viable ? "YES" : "NO - exceeds threshold"}`
       agent: "cargo",
       status: "done",
       iteration,
-      input,
+      input: { mode, ...analysisRequest, costThresholdInr },
       output,
       reasoning,
       durationMs: Date.now() - t0,
     },
-    costUsd,
-    transitDays: days,
+    costInr,
+    transitDays,
     viable,
   };
 }
@@ -190,7 +208,7 @@ async function runPlannerEvaluation(
   leg: LegInput,
   allSteps: AgentStep[],
   finalMode: string,
-  costUsd: number,
+  costInr: number,
   transitDays: number,
   solved: boolean,
   iterations: number
@@ -209,7 +227,7 @@ async function runPlannerEvaluation(
 Original mode: ${leg.mode}
 Iterations run: ${iterations}
 Final mode chosen: ${finalMode}
-Final estimated cost: $${costUsd.toLocaleString()}
+Final estimated cost: ₹${costInr.toLocaleString()}
 Final transit days: ${transitDays}
 Solved within budget: ${solved}
 
@@ -217,7 +235,7 @@ Agent trace:
 ${stepSummary}`
   );
 
-  const output = { finalMode, finalCostUsd: costUsd, finalTransitDays: transitDays, solved };
+  const output = { finalMode, finalCostInr: costInr, finalTransitDays: transitDays, solved };
   if (traceId && spanId) await endSpan(traceId, spanId, output, solved ? "success" : "failed");
 
   return {
@@ -237,12 +255,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as {
       leg: LegInput;
       disruptions: DisruptionEvent[];
-      costThresholdUsd?: number;
+      costThresholdInr?: number;
       maxIterations?: number;
     };
 
     const { leg, disruptions } = body;
-    const costThresholdUsd = body.costThresholdUsd ?? 50_000;
+    const costThresholdInr = body.costThresholdInr ?? 500_000;
     const maxIterations    = Math.min(body.maxIterations ?? 4, 6);
 
     if (!leg || !disruptions) {
@@ -261,12 +279,12 @@ export async function POST(req: NextRequest) {
     const traceId = await startWorkflowTrace("planner_orchestration", {
       leg: `${leg.fromName}→${leg.toName}`,
       disruptions: disruptions.length,
-      costThresholdUsd
+      costThresholdInr
     });
     const traceUrl = traceId ? getTraceUrl(traceId) : null;
 
     // ── Initial planner step ─────────────────────────────────────────────────
-    const plannerFanoutSpanId = traceId ? await startSpan(traceId, null, "planner_fanout", { alternatives, costThreshold: costThresholdUsd }) : null;
+    const plannerFanoutSpanId = traceId ? await startSpan(traceId, null, "planner_fanout", { alternatives, costThreshold: costThresholdInr }) : null;
 
     const plannerStart: AgentStep = {
       agent: "planner",
@@ -277,10 +295,10 @@ export async function POST(req: NextRequest) {
         originalMode: leg.mode,
         disruptions: disruptions.map(d => d.title),
         alternatives,
-        costThreshold: costThresholdUsd,
+        costThreshold: costThresholdInr,
       },
       output: { plan: "Fan out to Reroute Agent then Cargo Cost Agent for each alternative" },
-      reasoning: `Disruption detected on ${leg.mode} leg (${leg.fromName} → ${leg.toName}). Planning to evaluate ${alternatives.length} alternatives: ${alternatives.join(", ")}. Cost threshold: $${costThresholdUsd.toLocaleString()}.`,
+      reasoning: `Disruption detected on ${leg.mode} leg (${leg.fromName} → ${leg.toName}). Planning to evaluate ${alternatives.length} alternatives: ${alternatives.join(", ")}. Cost threshold: ₹${costThresholdInr.toLocaleString()}.`,
       durationMs: 0,
     };
     steps.push(plannerStart);
@@ -297,13 +315,13 @@ export async function POST(req: NextRequest) {
       steps.push(rerouteStep);
 
       // Cargo cost agent
-      const { step: cargoStep, costUsd, transitDays, viable } = await runCargoAgent(
-        traceId, null, leg, altMode, disruptions, iteration, costThresholdUsd
+      const { step: cargoStep, costInr, transitDays, viable } = await runCargoAgent(
+        traceId, null, leg, altMode, disruptions, iteration, costThresholdInr
       );
       steps.push(cargoStep);
 
       finalMode = altMode;
-      finalCost = costUsd;
+      finalCost = costInr;
       finalDays = transitDays;
 
       if (viable) {
@@ -312,14 +330,14 @@ export async function POST(req: NextRequest) {
       }
       
       // Not viable — planner logs and continues to next alternative
-      const loopSpanId = traceId ? await startSpan(traceId, null, "planner_loop", { rejectedMode: altMode, costUsd }) : null;
+      const loopSpanId = traceId ? await startSpan(traceId, null, "planner_loop", { rejectedMode: altMode, costInr }) : null;
       const loopStep: AgentStep = {
         agent: "planner",
         status: "running",
         iteration,
-        input: { rejectedMode: altMode, costUsd, reason: "exceeds threshold" },
+        input: { rejectedMode: altMode, costInr, reason: "exceeds threshold" },
         output: { nextAction: `Try next alternative` },
-        reasoning: `${altMode.toUpperCase()} cost ($${costUsd.toLocaleString()}) exceeds threshold ($${costThresholdUsd.toLocaleString()}). Escalating to next alternative.`,
+        reasoning: `${altMode.toUpperCase()} cost (₹${costInr.toLocaleString()}) exceeds threshold (₹${costThresholdInr.toLocaleString()}). Escalating to next alternative.`,
         durationMs: 0,
       };
       steps.push(loopStep);
@@ -337,7 +355,7 @@ export async function POST(req: NextRequest) {
       solved,
       iterations: iteration,
       finalMode,
-      finalCostUsd: finalCost,
+      finalCostInr: finalCost,
       finalTransitDays: finalDays,
       finalRecommendation: finalPlannerStep.reasoning,
       steps,
@@ -345,7 +363,7 @@ export async function POST(req: NextRequest) {
     };
 
     if (traceId) {
-      await endTrace(traceId, { solved, finalMode, finalCostUsd: finalCost }, solved ? "success" : "failed");
+      await endTrace(traceId, { solved, finalMode, finalCostInr: finalCost }, solved ? "success" : "failed");
     }
 
     return NextResponse.json(result);

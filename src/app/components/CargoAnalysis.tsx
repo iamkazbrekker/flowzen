@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Package, 
   MapPin, 
@@ -19,24 +19,7 @@ import {
   Leaf
 } from "lucide-react";
 
-interface CostAnalysisResult {
-  request: any;
-  route_data: any;
-  mode_estimates: any[];
-  disruption_impacts: any[];
-  ai_recommendation: {
-    recommended_mode: string;
-    estimated_cost_inr: number;
-    estimated_delay_days: number;
-    risk_level: string;
-    reason: string;
-    best_route: string;
-    safest_route: string;
-    fastest_route: string;
-    cheapest_route: string;
-    confidence: number;
-  };
-}
+import { CostAnalysisResult } from "@/services/cost-analysis/types";
 
 const MODE_ICONS: Record<string, any> = {
   air: Plane,
@@ -52,13 +35,19 @@ const MODE_COLORS: Record<string, string> = {
   road: "#fbbf24", // Amber
 };
 
-export default function CargoAnalysis() {
+interface Props {
+  source?: string;
+  destination?: string;
+  weight?: number;
+}
+
+export default function CargoAnalysis({ source: initialSource, destination: initialDestination, weight: initialWeight }: Props) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CostAnalysisResult | null>(null);
   const [formData, setFormData] = useState({
-    source: "Mumbai",
-    destination: "Rotterdam",
-    cargo_weight_kg: 5000,
+    source: initialSource || "Mumbai",
+    destination: initialDestination || "Rotterdam",
+    cargo_weight_kg: initialWeight || 5000,
     cargo_type: "electronics",
     priority: "standard"
   });
