@@ -248,7 +248,17 @@ export default function CargoAnalysis() {
                       )}
                     </div>
                     
-                    <h4 className="text-white font-semibold capitalize mb-1">{est.mode}</h4>
+                    <div className="flex items-center justify-between mb-1">
+                      <h4 className="text-white font-semibold capitalize">{est.mode}</h4>
+                      {est.is_live && (
+                        <span className="bg-emerald-500/20 text-emerald-400 text-[8px] font-bold px-1.5 py-0.5 rounded border border-emerald-500/30 animate-pulse">
+                          LIVE
+                        </span>
+                      )}
+                    </div>
+                    {est.provider && (
+                      <p className="text-zinc-500 text-[9px] mb-2 truncate">via {est.provider}</p>
+                    )}
                     <div className="space-y-2">
                       <div className="flex justify-between items-end">
                         <span className="text-zinc-500 text-[10px] uppercase">Cost</span>

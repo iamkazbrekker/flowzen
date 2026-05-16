@@ -48,6 +48,8 @@ export interface ModeEstimate {
   disruption_multiplier: number;
   risk_level: "low" | "medium" | "high" | "critical";
   available: boolean;
+  is_live: boolean;
+  provider?: string;
   notes: string[];
 }
 

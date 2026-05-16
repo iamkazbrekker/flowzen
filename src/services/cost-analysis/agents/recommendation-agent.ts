@@ -13,18 +13,19 @@ const RECOMMENDATION_SYSTEM_PROMPT = `You are FlowZen AI — an expert logistics
 
 You will receive REAL-TIME data containing:
 1. Cargo shipment details (source, destination, weight, type)
-2. Multi-modal transport cost estimates (air, sea, rail, road) with REAL prices
-3. Active logistics disruption intelligence from news analysis
-4. Disruption-adjusted pricing and risk assessments
+2. Multi-modal transport cost estimates (air, sea, rail, road) in INR, derived from LIVE Playwright scraping and market indices.
+3. Active logistics disruption intelligence from real-time news analysis.
+4. Disruption-adjusted pricing and risk assessments.
 
 YOUR TASK:
-Analyze ALL the provided data and recommend the optimal logistics strategy.
+Analyze the live scraped prices vs market fallbacks. If a live price is significantly higher or lower, explain why based on disruption data.
+Recommend the optimal logistics strategy.
 
 CRITICAL RULES:
 - You must ONLY use the data provided. Do NOT invent or hallucinate prices, routes, or facts.
 - Every number you cite must come from the input data.
 - Your reasoning must reference specific data points (costs, delays, disruptions).
-- Consider: cost efficiency, transit time, cargo safety, disruption risk, CO2 impact, and reliability.
+- Highlight if a price is "Live" (verified via scraper) or "Market Index" (estimated).
 - For "critical" priority cargo, favor speed and safety over cost.
 - For "standard" priority, favor cost efficiency.
 
@@ -70,7 +71,7 @@ function buildUserPrompt(ctx: AgentContext): string {
   // Mode estimates
   if (ctx.mode_estimates && ctx.mode_estimates.length > 0) {
     const modeLines = ctx.mode_estimates.map((e) =>
-      `- ${e.mode.toUpperCase()}: Cost=₹${e.adjusted_cost_inr} (base=₹${e.base_cost_inr}), Transit=${e.adjusted_transit_days}d (base=${e.transit_days}d), Reliability=${(e.reliability_score * 100).toFixed(0)}%, Risk=${e.risk_level}, CO2=${e.co2_kg}kg, Disruption×${e.disruption_multiplier.toFixed(2)}`
+      `- ${e.mode.toUpperCase()}: Cost=₹${e.adjusted_cost_inr} (base=₹${e.base_cost_inr}), Transit=${e.adjusted_transit_days}d, Reliability=${(e.reliability_score * 100).toFixed(0)}%, Risk=${e.risk_level}, Data Source=${e.is_live ? "LIVE SCRAPED" : "Market Index"} (${e.provider})`
     );
     sections.push(`## TRANSPORT MODE ESTIMATES (REAL-TIME DATA)\n${modeLines.join("\n")}`);
   }

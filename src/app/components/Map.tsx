@@ -37,7 +37,7 @@ const SEV_DASH: Record<string, string> = {
 
 function makeDisruptionIcon(severity: string, rerouted: boolean) {
   const bg = SEV_COLOR[severity] ?? "#f97316";
-  const label = rerouted ? "↪ REROUTED" : `⚠ ${severity.toUpperCase()}`;
+  const label = rerouted ? "REROUTED" : `!! ${severity.toUpperCase()}`;
   return L.divIcon({
     html: `<div style="
       background:rgba(0,0,0,0.9);border:1px solid ${bg};
@@ -339,7 +339,7 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
                     color:${altColor};font-size:7px;font-family:monospace;letter-spacing:1px;
                     padding:2px 8px;border-radius:10px;white-space:nowrap;pointer-events:none;
                     box-shadow:0 0 8px ${altColor}55;">
-                    ↪ REROUTED: ${altMode.toUpperCase()}
+                    REROUTED: ${altMode.toUpperCase()}
                   </div>`,
                   className: "", iconSize: [0, 0], iconAnchor: [0, 0],
                 }),
@@ -384,7 +384,7 @@ const Map = forwardRef<MapHandle, MapProps>(({ journeys, onLegClick, analyses = 
             textAlign: "center", padding: "32px", background: "rgba(10,10,10,0.75)",
             borderRadius: 20, border: "1px solid rgba(255,255,255,0.08)", backdropFilter: "blur(16px)"
           }}>
-            <div style={{ fontSize: 32, marginBottom: 16 }}>🗺️</div>
+            <div style={{ fontSize: 32, marginBottom: 16 }}>MAP</div>
 
             <div style={{ marginBottom: 12, letterSpacing: 2, color: "#ffffff44", textTransform: "uppercase", fontSize: 9 }}>
               Transport Modes
