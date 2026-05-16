@@ -56,7 +56,7 @@ export async function extractDisruption(
   text: string
 ): Promise<DisruptionEvent | null> {
   return executeGroqWithRetry<DisruptionEvent>(
-    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
     DISRUPTION_EXTRACTION_PROMPT,
     text,
     0.1

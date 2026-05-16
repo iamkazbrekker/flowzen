@@ -6,7 +6,7 @@ export const groqClient = process.env.GROQ_API_KEY
   : null;
 
 // ── Model identifier ──────────────────────────────────────────────────────────
-export const LLAMA_MODEL = 'llama-3.1-8b-instant';
+export const LLAMA_MODEL = 'llama-3.3-70b-versatile';
 
 // ── System prompt for NLP disruption extraction ───────────────────────────────
 export const DISRUPTION_NLP_PROMPT = `You are a logistics-disruption classifier.

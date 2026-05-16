@@ -162,7 +162,7 @@ export async function recommendationAgent(ctx: AgentContext): Promise<AgentConte
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const completion = await groq.chat.completions.create({
-        model: "llama-3.1-8b-instant",
+        model: "llama-3.3-70b-versatile",
         temperature: 0.1,
         messages: [
           { role: "system", content: RECOMMENDATION_SYSTEM_PROMPT },

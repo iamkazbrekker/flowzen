@@ -85,7 +85,7 @@ function estimateCost(mode: string, weightKg: number, days: number) {
 
 async function callGroq(systemPrompt: string, userPrompt: string): Promise<string> {
   const res = await groq.chat.completions.create({
-    model: "llama-3.1-8b-instant",
+    model: "llama-3.3-70b-versatile",
     temperature: 0.3,
     max_tokens: 400,
     messages: [
