@@ -4,7 +4,7 @@
  * Includes: retry logic, timeout handling, and currency normalization
  */
 
-import { chromium, Browser, Page } from "playwright";
+import type { Browser, Page } from "playwright";
 import { TransportMode } from "../types";
 
 export interface ScrapedFare {
@@ -29,6 +29,16 @@ export async function scrapeLiveFares(
   let browser: Browser | null = null;
 
   try {
+    // Dynamic import to prevent Vercel serverless function crash on load
+    let chromium;
+    try {
+      const pw = await import("playwright");
+      chromium = pw.chromium;
+    } catch (e) {
+      console.warn("[Scraper] Playwright not available (likely Vercel environment). Skipping live scrape.");
+      return fares;
+    }
+
     browser = await chromium.launch({ 
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
